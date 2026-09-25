@@ -1,0 +1,6 @@
+# training output
+**/logs/
+**/plots/
+**/results/
+__pycache__/
+*.pyc

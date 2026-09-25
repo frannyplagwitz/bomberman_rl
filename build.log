@@ -1,0 +1,654 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 487B done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/continuumio/miniconda3:latest
+#2 ...
+
+#3 [auth] continuumio/miniconda3:pull token for registry-1.docker.io
+#3 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/continuumio/miniconda3:latest
+#2 DONE 1.3s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 2B done
+#4 DONE 0.0s
+
+#5 [ 1/11] FROM docker.io/continuumio/miniconda3:latest@sha256:eca594d684f495c1a02beff33a9fab53aec8c5830eaf431bb149912dc6c9e4c1
+#5 resolve docker.io/continuumio/miniconda3:latest@sha256:eca594d684f495c1a02beff33a9fab53aec8c5830eaf431bb149912dc6c9e4c1 0.1s done
+#5 DONE 0.1s
+
+#6 [ 2/11] WORKDIR /home/bomberman
+#6 CACHED
+
+#7 [internal] load build context
+#7 transferring context: 192.81kB 0.1s done
+#7 DONE 0.2s
+
+#8 [ 3/11] RUN apt-get update
+#8 0.530 Get:1 http://deb.debian.org/debian trixie InRelease [140 kB]
+#8 0.560 Get:2 http://deb.debian.org/debian trixie-updates InRelease [47.3 kB]
+#8 0.570 Get:3 http://deb.debian.org/debian-security trixie-security InRelease [43.4 kB]
+#8 0.614 Get:4 http://deb.debian.org/debian trixie/main amd64 Packages [9678 kB]
+#8 1.782 Get:5 http://deb.debian.org/debian trixie-updates/main amd64 Packages [4412 B]
+#8 1.783 Get:6 http://deb.debian.org/debian-security trixie-security/main amd64 Packages [261 kB]
+#8 2.734 Fetched 10.2 MB in 2s (4474 kB/s)
+#8 2.734 Reading package lists...
+#8 DONE 3.5s
+
+#9 [ 4/11] RUN apt-get -y install gcc g++
+#9 0.324 Reading package lists...
+#9 1.070 Building dependency tree...
+#9 1.280 Reading state information...
+#9 1.545 The following additional packages will be installed:
+#9 1.545   binutils binutils-common binutils-x86-64-linux-gnu cpp cpp-14
+#9 1.545   cpp-14-x86-64-linux-gnu cpp-x86-64-linux-gnu g++-14 g++-14-x86-64-linux-gnu
+#9 1.545   g++-x86-64-linux-gnu gcc-14 gcc-14-x86-64-linux-gnu gcc-x86-64-linux-gnu
+#9 1.545   libasan8 libbinutils libc-bin libc-dev-bin libc6 libc6-dev libcc1-0
+#9 1.545   libcrypt-dev libctf-nobfd0 libctf0 libgcc-14-dev libgomp1 libgprofng0
+#9 1.545   libhwasan0 libisl23 libitm1 libjansson4 liblsan0 libmpc3 libmpfr6
+#9 1.547   libquadmath0 libsframe1 libstdc++-14-dev libtsan2 libubsan1 linux-libc-dev
+#9 1.548   manpages manpages-dev rpcsvc-proto
+#9 1.550 Suggested packages:
+#9 1.550   binutils-doc gprofng-gui binutils-gold cpp-doc gcc-14-locales cpp-14-doc
+#9 1.550   g++-multilib g++-14-multilib gcc-14-doc gcc-multilib make autoconf automake
+#9 1.550   libtool flex bison gdb gcc-doc gcc-14-multilib gdb-x86-64-linux-gnu
+#9 1.550   libc-devtools glibc-doc libstdc++-14-doc man-browser
+#9 1.748 The following NEW packages will be installed:
+#9 1.748   binutils binutils-common binutils-x86-64-linux-gnu cpp cpp-14
+#9 1.748   cpp-14-x86-64-linux-gnu cpp-x86-64-linux-gnu g++ g++-14
+#9 1.748   g++-14-x86-64-linux-gnu g++-x86-64-linux-gnu gcc gcc-14
+#9 1.748   gcc-14-x86-64-linux-gnu gcc-x86-64-linux-gnu libasan8 libbinutils
+#9 1.749   libc-dev-bin libc6-dev libcc1-0 libcrypt-dev libctf-nobfd0 libctf0
+#9 1.750   libgcc-14-dev libgomp1 libgprofng0 libhwasan0 libisl23 libitm1 libjansson4
+#9 1.751   liblsan0 libmpc3 libmpfr6 libquadmath0 libsframe1 libstdc++-14-dev libtsan2
+#9 1.752   libubsan1 linux-libc-dev manpages manpages-dev rpcsvc-proto
+#9 1.753 The following packages will be upgraded:
+#9 1.755   libc-bin libc6
+#9 1.851 2 upgraded, 42 newly installed, 0 to remove and 21 not upgraded.
+#9 1.851 Need to get 78.6 MB of archives.
+#9 1.851 After this operation, 283 MB of additional disk space will be used.
+#9 1.851 Get:1 http://deb.debian.org/debian trixie/main amd64 libc6 amd64 2.41-12+deb13u4 [2847 kB]
+#9 2.199 Get:2 http://deb.debian.org/debian trixie/main amd64 libc-bin amd64 2.41-12+deb13u4 [638 kB]
+#9 2.281 Get:3 http://deb.debian.org/debian trixie/main amd64 manpages all 6.9.1-1 [1393 kB]
+#9 2.457 Get:4 http://deb.debian.org/debian trixie/main amd64 libsframe1 amd64 2.44-3 [78.4 kB]
+#9 2.461 Get:5 http://deb.debian.org/debian trixie/main amd64 binutils-common amd64 2.44-3 [2509 kB]
+#9 2.741 Get:6 http://deb.debian.org/debian trixie/main amd64 libbinutils amd64 2.44-3 [534 kB]
+#9 2.802 Get:7 http://deb.debian.org/debian trixie/main amd64 libgprofng0 amd64 2.44-3 [808 kB]
+#9 2.894 Get:8 http://deb.debian.org/debian trixie/main amd64 libctf-nobfd0 amd64 2.44-3 [156 kB]
+#9 2.911 Get:9 http://deb.debian.org/debian trixie/main amd64 libctf0 amd64 2.44-3 [88.6 kB]
+#9 2.922 Get:10 http://deb.debian.org/debian trixie/main amd64 libjansson4 amd64 2.14-2+b3 [39.8 kB]
+#9 2.925 Get:11 http://deb.debian.org/debian trixie/main amd64 binutils-x86-64-linux-gnu amd64 2.44-3 [1014 kB]
+#9 3.043 Get:12 http://deb.debian.org/debian trixie/main amd64 binutils amd64 2.44-3 [265 kB]
+#9 3.074 Get:13 http://deb.debian.org/debian trixie/main amd64 libisl23 amd64 0.27-1 [659 kB]
+#9 3.150 Get:14 http://deb.debian.org/debian trixie/main amd64 libmpfr6 amd64 4.2.2-1 [729 kB]
+#9 3.234 Get:15 http://deb.debian.org/debian trixie/main amd64 libmpc3 amd64 1.3.1-1+b3 [52.2 kB]
+#9 3.239 Get:16 http://deb.debian.org/debian trixie/main amd64 cpp-14-x86-64-linux-gnu amd64 14.2.0-19 [11.0 MB]
+#9 4.515 Get:17 http://deb.debian.org/debian trixie/main amd64 cpp-14 amd64 14.2.0-19 [1280 B]
+#9 4.517 Get:18 http://deb.debian.org/debian trixie/main amd64 cpp-x86-64-linux-gnu amd64 4:14.2.0-1 [4840 B]
+#9 4.518 Get:19 http://deb.debian.org/debian trixie/main amd64 cpp amd64 4:14.2.0-1 [1568 B]
+#9 4.519 Get:20 http://deb.debian.org/debian trixie/main amd64 libcc1-0 amd64 14.2.0-19 [42.8 kB]
+#9 4.521 Get:21 http://deb.debian.org/debian trixie/main amd64 libgomp1 amd64 14.2.0-19 [137 kB]
+#9 4.533 Get:22 http://deb.debian.org/debian trixie/main amd64 libitm1 amd64 14.2.0-19 [26.0 kB]
+#9 4.535 Get:23 http://deb.debian.org/debian trixie/main amd64 libasan8 amd64 14.2.0-19 [2725 kB]
+#9 4.850 Get:24 http://deb.debian.org/debian trixie/main amd64 liblsan0 amd64 14.2.0-19 [1204 kB]
+#9 4.988 Get:25 http://deb.debian.org/debian trixie/main amd64 libtsan2 amd64 14.2.0-19 [2460 kB]
+#9 5.272 Get:26 http://deb.debian.org/debian trixie/main amd64 libubsan1 amd64 14.2.0-19 [1074 kB]
+#9 5.395 Get:27 http://deb.debian.org/debian trixie/main amd64 libhwasan0 amd64 14.2.0-19 [1488 kB]
+#9 5.567 Get:28 http://deb.debian.org/debian trixie/main amd64 libquadmath0 amd64 14.2.0-19 [145 kB]
+#9 5.583 Get:29 http://deb.debian.org/debian trixie/main amd64 libgcc-14-dev amd64 14.2.0-19 [2672 kB]
+#9 5.892 Get:30 http://deb.debian.org/debian trixie/main amd64 gcc-14-x86-64-linux-gnu amd64 14.2.0-19 [21.4 MB]
+#9 8.668 Get:31 http://deb.debian.org/debian trixie/main amd64 gcc-14 amd64 14.2.0-19 [540 kB]
+#9 8.726 Get:32 http://deb.debian.org/debian trixie/main amd64 gcc-x86-64-linux-gnu amd64 4:14.2.0-1 [1436 B]
+#9 8.726 Get:33 http://deb.debian.org/debian trixie/main amd64 gcc amd64 4:14.2.0-1 [5136 B]
+#9 8.727 Get:34 http://deb.debian.org/debian trixie/main amd64 libc-dev-bin amd64 2.41-12+deb13u4 [60.0 kB]
+#9 8.735 Get:35 http://deb.debian.org/debian trixie/main amd64 linux-libc-dev all 6.12.107-1 [2919 kB]
+#9 9.234 Get:36 http://deb.debian.org/debian trixie/main amd64 libcrypt-dev amd64 1:4.4.38-1 [119 kB]
+#9 9.249 Get:37 http://deb.debian.org/debian trixie/main amd64 rpcsvc-proto amd64 1.4.3-1 [63.3 kB]
+#9 9.258 Get:38 http://deb.debian.org/debian trixie/main amd64 libc6-dev amd64 2.41-12+deb13u4 [1995 kB]
+#9 9.519 Get:39 http://deb.debian.org/debian trixie/main amd64 libstdc++-14-dev amd64 14.2.0-19 [2376 kB]
+#9 9.867 Get:40 http://deb.debian.org/debian trixie/main amd64 g++-14-x86-64-linux-gnu amd64 14.2.0-19 [12.1 MB]
+#9 11.36 Get:41 http://deb.debian.org/debian trixie/main amd64 g++-14 amd64 14.2.0-19 [22.5 kB]
+#9 11.36 Get:42 http://deb.debian.org/debian trixie/main amd64 g++-x86-64-linux-gnu amd64 4:14.2.0-1 [1200 B]
+#9 11.36 Get:43 http://deb.debian.org/debian trixie/main amd64 g++ amd64 4:14.2.0-1 [1344 B]
+#9 11.36 Get:44 http://deb.debian.org/debian trixie/main amd64 manpages-dev all 6.9.1-1 [2122 kB]
+#9 12.03 debconf: unable to initialize frontend: Dialog
+#9 12.03 debconf: (TERM is not set, so the dialog frontend is not usable.)
+#9 12.03 debconf: falling back to frontend: Readline
+#9 12.04 debconf: unable to initialize frontend: Readline
+#9 12.04 debconf: (This frontend requires a controlling tty.)
+#9 12.04 debconf: falling back to frontend: Teletype
+#9 12.05 debconf: unable to initialize frontend: Teletype
+#9 12.05 debconf: (This frontend requires a controlling tty.)
+#9 12.05 debconf: falling back to frontend: Noninteractive
+#9 13.67 Preconfiguring packages ...
+#9 13.75 Fetched 78.6 MB in 10s (7922 kB/s)
+#9 13.81 (Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 11751 files and directories currently installed.)
+#9 13.88 Preparing to unpack .../libc6_2.41-12+deb13u4_amd64.deb ...
+#9 13.99 debconf: unable to initialize frontend: Dialog
+#9 13.99 debconf: (TERM is not set, so the dialog frontend is not usable.)
+#9 13.99 debconf: falling back to frontend: Readline
+#9 14.01 debconf: unable to initialize frontend: Readline
+#9 14.01 debconf: (This frontend requires a controlling tty.)
+#9 14.01 debconf: falling back to frontend: Teletype
+#9 14.01 debconf: unable to initialize frontend: Teletype
+#9 14.01 debconf: (This frontend requires a controlling tty.)
+#9 14.01 debconf: falling back to frontend: Noninteractive
+#9 14.11 Unpacking libc6:amd64 (2.41-12+deb13u4) over (2.41-12+deb13u3) ...
+#9 15.10 Setting up libc6:amd64 (2.41-12+deb13u4) ...
+#9 15.21 debconf: unable to initialize frontend: Dialog
+#9 15.21 debconf: (TERM is not set, so the dialog frontend is not usable.)
+#9 15.21 debconf: falling back to frontend: Readline
+#9 15.22 debconf: unable to initialize frontend: Readline
+#9 15.22 debconf: (This frontend requires a controlling tty.)
+#9 15.22 debconf: falling back to frontend: Teletype
+#9 15.23 debconf: unable to initialize frontend: Teletype
+#9 15.23 debconf: (This frontend requires a controlling tty.)
+#9 15.23 debconf: falling back to frontend: Noninteractive
+#9 15.34 (Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 11751 files and directories currently installed.)
+#9 15.36 Preparing to unpack .../libc-bin_2.41-12+deb13u4_amd64.deb ...
+#9 15.38 Unpacking libc-bin (2.41-12+deb13u4) over (2.41-12+deb13u3) ...
+#9 15.55 Setting up libc-bin (2.41-12+deb13u4) ...
+#9 15.76 Selecting previously unselected package manpages.
+#9 15.76 (Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 11751 files and directories currently installed.)
+#9 15.78 Preparing to unpack .../00-manpages_6.9.1-1_all.deb ...
+#9 15.79 Unpacking manpages (6.9.1-1) ...
+#9 15.89 Selecting previously unselected package libsframe1:amd64.
+#9 15.89 Preparing to unpack .../01-libsframe1_2.44-3_amd64.deb ...
+#9 15.90 Unpacking libsframe1:amd64 (2.44-3) ...
+#9 15.95 Selecting previously unselected package binutils-common:amd64.
+#9 15.95 Preparing to unpack .../02-binutils-common_2.44-3_amd64.deb ...
+#9 15.96 Unpacking binutils-common:amd64 (2.44-3) ...
+#9 16.19 Selecting previously unselected package libbinutils:amd64.
+#9 16.19 Preparing to unpack .../03-libbinutils_2.44-3_amd64.deb ...
+#9 16.20 Unpacking libbinutils:amd64 (2.44-3) ...
+#9 16.30 Selecting previously unselected package libgprofng0:amd64.
+#9 16.30 Preparing to unpack .../04-libgprofng0_2.44-3_amd64.deb ...
+#9 16.31 Unpacking libgprofng0:amd64 (2.44-3) ...
+#9 16.42 Selecting previously unselected package libctf-nobfd0:amd64.
+#9 16.42 Preparing to unpack .../05-libctf-nobfd0_2.44-3_amd64.deb ...
+#9 16.43 Unpacking libctf-nobfd0:amd64 (2.44-3) ...
+#9 16.49 Selecting previously unselected package libctf0:amd64.
+#9 16.49 Preparing to unpack .../06-libctf0_2.44-3_amd64.deb ...
+#9 16.50 Unpacking libctf0:amd64 (2.44-3) ...
+#9 16.55 Selecting previously unselected package libjansson4:amd64.
+#9 16.56 Preparing to unpack .../07-libjansson4_2.14-2+b3_amd64.deb ...
+#9 16.56 Unpacking libjansson4:amd64 (2.14-2+b3) ...
+#9 16.61 Selecting previously unselected package binutils-x86-64-linux-gnu.
+#9 16.61 Preparing to unpack .../08-binutils-x86-64-linux-gnu_2.44-3_amd64.deb ...
+#9 16.62 Unpacking binutils-x86-64-linux-gnu (2.44-3) ...
+#9 16.78 Selecting previously unselected package binutils.
+#9 16.78 Preparing to unpack .../09-binutils_2.44-3_amd64.deb ...
+#9 16.79 Unpacking binutils (2.44-3) ...
+#9 16.87 Selecting previously unselected package libisl23:amd64.
+#9 16.87 Preparing to unpack .../10-libisl23_0.27-1_amd64.deb ...
+#9 16.88 Unpacking libisl23:amd64 (0.27-1) ...
+#9 16.98 Selecting previously unselected package libmpfr6:amd64.
+#9 16.99 Preparing to unpack .../11-libmpfr6_4.2.2-1_amd64.deb ...
+#9 16.99 Unpacking libmpfr6:amd64 (4.2.2-1) ...
+#9 17.07 Selecting previously unselected package libmpc3:amd64.
+#9 17.07 Preparing to unpack .../12-libmpc3_1.3.1-1+b3_amd64.deb ...
+#9 17.08 Unpacking libmpc3:amd64 (1.3.1-1+b3) ...
+#9 17.12 Selecting previously unselected package cpp-14-x86-64-linux-gnu.
+#9 17.13 Preparing to unpack .../13-cpp-14-x86-64-linux-gnu_14.2.0-19_amd64.deb ...
+#9 17.13 Unpacking cpp-14-x86-64-linux-gnu (14.2.0-19) ...
+#9 17.80 Selecting previously unselected package cpp-14.
+#9 17.80 Preparing to unpack .../14-cpp-14_14.2.0-19_amd64.deb ...
+#9 17.81 Unpacking cpp-14 (14.2.0-19) ...
+#9 17.85 Selecting previously unselected package cpp-x86-64-linux-gnu.
+#9 17.86 Preparing to unpack .../15-cpp-x86-64-linux-gnu_4%3a14.2.0-1_amd64.deb ...
+#9 17.86 Unpacking cpp-x86-64-linux-gnu (4:14.2.0-1) ...
+#9 17.92 Selecting previously unselected package cpp.
+#9 17.93 Preparing to unpack .../16-cpp_4%3a14.2.0-1_amd64.deb ...
+#9 17.94 Unpacking cpp (4:14.2.0-1) ...
+#9 17.99 Selecting previously unselected package libcc1-0:amd64.
+#9 18.00 Preparing to unpack .../17-libcc1-0_14.2.0-19_amd64.deb ...
+#9 18.00 Unpacking libcc1-0:amd64 (14.2.0-19) ...
+#9 18.06 Selecting previously unselected package libgomp1:amd64.
+#9 18.06 Preparing to unpack .../18-libgomp1_14.2.0-19_amd64.deb ...
+#9 18.07 Unpacking libgomp1:amd64 (14.2.0-19) ...
+#9 18.12 Selecting previously unselected package libitm1:amd64.
+#9 18.13 Preparing to unpack .../19-libitm1_14.2.0-19_amd64.deb ...
+#9 18.14 Unpacking libitm1:amd64 (14.2.0-19) ...
+#9 18.19 Selecting previously unselected package libasan8:amd64.
+#9 18.19 Preparing to unpack .../20-libasan8_14.2.0-19_amd64.deb ...
+#9 18.20 Unpacking libasan8:amd64 (14.2.0-19) ...
+#9 18.44 Selecting previously unselected package liblsan0:amd64.
+#9 18.44 Preparing to unpack .../21-liblsan0_14.2.0-19_amd64.deb ...
+#9 18.45 Unpacking liblsan0:amd64 (14.2.0-19) ...
+#9 18.60 Selecting previously unselected package libtsan2:amd64.
+#9 18.60 Preparing to unpack .../22-libtsan2_14.2.0-19_amd64.deb ...
+#9 18.60 Unpacking libtsan2:amd64 (14.2.0-19) ...
+#9 18.82 Selecting previously unselected package libubsan1:amd64.
+#9 18.82 Preparing to unpack .../23-libubsan1_14.2.0-19_amd64.deb ...
+#9 18.83 Unpacking libubsan1:amd64 (14.2.0-19) ...
+#9 18.96 Selecting previously unselected package libhwasan0:amd64.
+#9 18.96 Preparing to unpack .../24-libhwasan0_14.2.0-19_amd64.deb ...
+#9 18.97 Unpacking libhwasan0:amd64 (14.2.0-19) ...
+#9 19.12 Selecting previously unselected package libquadmath0:amd64.
+#9 19.12 Preparing to unpack .../25-libquadmath0_14.2.0-19_amd64.deb ...
+#9 19.13 Unpacking libquadmath0:amd64 (14.2.0-19) ...
+#9 19.18 Selecting previously unselected package libgcc-14-dev:amd64.
+#9 19.18 Preparing to unpack .../26-libgcc-14-dev_14.2.0-19_amd64.deb ...
+#9 19.19 Unpacking libgcc-14-dev:amd64 (14.2.0-19) ...
+#9 19.42 Selecting previously unselected package gcc-14-x86-64-linux-gnu.
+#9 19.43 Preparing to unpack .../27-gcc-14-x86-64-linux-gnu_14.2.0-19_amd64.deb ...
+#9 19.43 Unpacking gcc-14-x86-64-linux-gnu (14.2.0-19) ...
+#9 20.25 Selecting previously unselected package gcc-14.
+#9 20.26 Preparing to unpack .../28-gcc-14_14.2.0-19_amd64.deb ...
+#9 20.26 Unpacking gcc-14 (14.2.0-19) ...
+#9 20.32 Selecting previously unselected package gcc-x86-64-linux-gnu.
+#9 20.32 Preparing to unpack .../29-gcc-x86-64-linux-gnu_4%3a14.2.0-1_amd64.deb ...
+#9 20.33 Unpacking gcc-x86-64-linux-gnu (4:14.2.0-1) ...
+#9 20.38 Selecting previously unselected package gcc.
+#9 20.38 Preparing to unpack .../30-gcc_4%3a14.2.0-1_amd64.deb ...
+#9 20.39 Unpacking gcc (4:14.2.0-1) ...
+#9 20.43 Selecting previously unselected package libc-dev-bin.
+#9 20.43 Preparing to unpack .../31-libc-dev-bin_2.41-12+deb13u4_amd64.deb ...
+#9 20.44 Unpacking libc-dev-bin (2.41-12+deb13u4) ...
+#9 20.49 Selecting previously unselected package linux-libc-dev.
+#9 20.49 Preparing to unpack .../32-linux-libc-dev_6.12.107-1_all.deb ...
+#9 20.50 Unpacking linux-libc-dev (6.12.107-1) ...
+#9 21.08 Selecting previously unselected package libcrypt-dev:amd64.
+#9 21.08 Preparing to unpack .../33-libcrypt-dev_1%3a4.4.38-1_amd64.deb ...
+#9 21.10 Unpacking libcrypt-dev:amd64 (1:4.4.38-1) ...
+#9 21.14 Selecting previously unselected package rpcsvc-proto.
+#9 21.15 Preparing to unpack .../34-rpcsvc-proto_1.4.3-1_amd64.deb ...
+#9 21.15 Unpacking rpcsvc-proto (1.4.3-1) ...
+#9 21.21 Selecting previously unselected package libc6-dev:amd64.
+#9 21.22 Preparing to unpack .../35-libc6-dev_2.41-12+deb13u4_amd64.deb ...
+#9 21.22 Unpacking libc6-dev:amd64 (2.41-12+deb13u4) ...
+#9 21.48 Selecting previously unselected package libstdc++-14-dev:amd64.
+#9 21.48 Preparing to unpack .../36-libstdc++-14-dev_14.2.0-19_amd64.deb ...
+#9 21.49 Unpacking libstdc++-14-dev:amd64 (14.2.0-19) ...
+#9 21.87 Selecting previously unselected package g++-14-x86-64-linux-gnu.
+#9 21.88 Preparing to unpack .../37-g++-14-x86-64-linux-gnu_14.2.0-19_amd64.deb ...
+#9 21.88 Unpacking g++-14-x86-64-linux-gnu (14.2.0-19) ...
+#9 22.56 Selecting previously unselected package g++-14.
+#9 22.56 Preparing to unpack .../38-g++-14_14.2.0-19_amd64.deb ...
+#9 22.57 Unpacking g++-14 (14.2.0-19) ...
+#9 22.61 Selecting previously unselected package g++-x86-64-linux-gnu.
+#9 22.62 Preparing to unpack .../39-g++-x86-64-linux-gnu_4%3a14.2.0-1_amd64.deb ...
+#9 22.62 Unpacking g++-x86-64-linux-gnu (4:14.2.0-1) ...
+#9 22.67 Selecting previously unselected package g++.
+#9 22.67 Preparing to unpack .../40-g++_4%3a14.2.0-1_amd64.deb ...
+#9 22.68 Unpacking g++ (4:14.2.0-1) ...
+#9 22.72 Selecting previously unselected package manpages-dev.
+#9 22.72 Preparing to unpack .../41-manpages-dev_6.9.1-1_all.deb ...
+#9 22.73 Unpacking manpages-dev (6.9.1-1) ...
+#9 22.92 Setting up manpages (6.9.1-1) ...
+#9 22.93 Setting up binutils-common:amd64 (2.44-3) ...
+#9 22.95 Setting up linux-libc-dev (6.12.107-1) ...
+#9 22.96 Setting up libctf-nobfd0:amd64 (2.44-3) ...
+#9 22.98 Setting up libgomp1:amd64 (14.2.0-19) ...
+#9 22.99 Setting up libsframe1:amd64 (2.44-3) ...
+#9 23.00 Setting up libjansson4:amd64 (2.14-2+b3) ...
+#9 23.02 Setting up rpcsvc-proto (1.4.3-1) ...
+#9 23.03 Setting up libmpfr6:amd64 (4.2.2-1) ...
+#9 23.04 Setting up libquadmath0:amd64 (14.2.0-19) ...
+#9 23.06 Setting up libmpc3:amd64 (1.3.1-1+b3) ...
+#9 23.07 Setting up libubsan1:amd64 (14.2.0-19) ...
+#9 23.09 Setting up libhwasan0:amd64 (14.2.0-19) ...
+#9 23.10 Setting up libcrypt-dev:amd64 (1:4.4.38-1) ...
+#9 23.13 Setting up libasan8:amd64 (14.2.0-19) ...
+#9 23.14 Setting up libtsan2:amd64 (14.2.0-19) ...
+#9 23.15 Setting up libbinutils:amd64 (2.44-3) ...
+#9 23.17 Setting up libisl23:amd64 (0.27-1) ...
+#9 23.18 Setting up libc-dev-bin (2.41-12+deb13u4) ...
+#9 23.20 Setting up libcc1-0:amd64 (14.2.0-19) ...
+#9 23.21 Setting up liblsan0:amd64 (14.2.0-19) ...
+#9 23.23 Setting up libitm1:amd64 (14.2.0-19) ...
+#9 23.24 Setting up libctf0:amd64 (2.44-3) ...
+#9 23.25 Setting up manpages-dev (6.9.1-1) ...
+#9 23.27 Setting up libgprofng0:amd64 (2.44-3) ...
+#9 23.28 Setting up cpp-14-x86-64-linux-gnu (14.2.0-19) ...
+#9 23.30 Setting up cpp-14 (14.2.0-19) ...
+#9 23.31 Setting up libc6-dev:amd64 (2.41-12+deb13u4) ...
+#9 23.32 Setting up libgcc-14-dev:amd64 (14.2.0-19) ...
+#9 23.33 Setting up libstdc++-14-dev:amd64 (14.2.0-19) ...
+#9 23.35 Setting up binutils-x86-64-linux-gnu (2.44-3) ...
+#9 23.36 Setting up cpp-x86-64-linux-gnu (4:14.2.0-1) ...
+#9 23.37 Setting up binutils (2.44-3) ...
+#9 23.39 Setting up cpp (4:14.2.0-1) ...
+#9 23.42 Setting up gcc-14-x86-64-linux-gnu (14.2.0-19) ...
+#9 23.44 Setting up gcc-x86-64-linux-gnu (4:14.2.0-1) ...
+#9 23.45 Setting up gcc-14 (14.2.0-19) ...
+#9 23.47 Setting up g++-14-x86-64-linux-gnu (14.2.0-19) ...
+#9 23.48 Setting up g++-x86-64-linux-gnu (4:14.2.0-1) ...
+#9 23.50 Setting up g++-14 (14.2.0-19) ...
+#9 23.51 Setting up gcc (4:14.2.0-1) ...
+#9 23.54 Setting up g++ (4:14.2.0-1) ...
+#9 23.56 update-alternatives: using /usr/bin/g++ to provide /usr/bin/c++ (c++) in auto mode
+#9 23.57 Processing triggers for libc-bin (2.41-12+deb13u4) ...
+#9 DONE 23.9s
+
+#10 [ 5/11] RUN conda install scipy numpy matplotlib numba
+#10 2.262 Retrieving notices: ...working... done
+#10 3.384 Channels:
+#10 3.384  - defaults
+#10 3.384 Platform: linux-64
+#10 3.384 Collecting package metadata (repodata.json): ...working... done
+#10 8.802 Solving environment: ...working... done
+#10 9.548 
+#10 9.548 ## Package Plan ##
+#10 9.548 
+#10 9.548   environment location: /opt/conda
+#10 9.548 
+#10 9.548   added / updated specs:
+#10 9.548     - matplotlib
+#10 9.548     - numba
+#10 9.548     - numpy
+#10 9.548     - scipy
+#10 9.548 
+#10 9.548 
+#10 9.548 The following packages will be downloaded:
+#10 9.548 
+#10 9.548     package                    |            build
+#10 9.548     ---------------------------|-----------------
+#10 9.548     aom-3.13.2                 |       h664349e_0         2.7 MB
+#10 9.548     blas-1.0                   |              mkl           6 KB
+#10 9.548     cairo-1.18.4               |       ha82d1dd_1         660 KB
+#10 9.548     conda-26.7.2               |  py314h06a4308_0         1.3 MB
+#10 9.548     contourpy-1.3.3            |  py314hdb19cb5_0        11.3 MB
+#10 9.548     cycler-0.12.1              |  py314h06a4308_0          20 KB
+#10 9.548     cyrus-sasl-2.1.28          |       h2f687bf_5         211 KB
+#10 9.548     dav1d-1.5.3                |       h12c9f22_1         766 KB
+#10 9.548     fontconfig-2.18.2          |       h4dd9078_0         291 KB
+#10 9.548     fonttools-4.63.0           |  py314h47b2149_0         6.0 MB
+#10 9.548     freetype-2.14.1            |       hf5b9546_0         634 KB
+#10 9.548     graphite2-1.3.15           |       h9ba177b_0          93 KB
+#10 9.548     harfbuzz-12.3.0            |       h572a7f1_2         2.3 MB
+#10 9.548     intel-openmp-2025.0.0      |    h06a4308_1172        19.3 MB
+#10 9.548     kiwisolver-1.5.0           |  py314h7354ed3_0          77 KB
+#10 9.548     lcms2-2.19.1               |       h425df66_1         245 KB
+#10 9.548     lerc-4.1.0                 |       h7354ed3_2         266 KB
+#10 9.548     libavif-1.3.0              |       h2b90b00_1         151 KB
+#10 9.548     libcups-2.4.19             |       h23114ae_0         4.4 MB
+#10 9.548     libdeflate-1.22            |       h5eee18b_0          68 KB
+#10 9.548     libdrm-2.4.134             |       h22c3c2f_1         244 KB
+#10 9.548     libegl-1.7.0               |       h4cac700_3          43 KB
+#10 9.548     libevent-2.1.13            |       h0bdef0d_1         418 KB
+#10 9.548     libgfortran-15.2.0         |       h166f726_8          28 KB
+#10 9.548     libgfortran5-15.2.0        |       hc633d37_8         1.5 MB
+#10 9.548     libgl-1.7.0                |       hb0f338c_3         129 KB
+#10 9.548     libglib-2.88.3             |       ha16e27a_0         3.9 MB
+#10 9.548     libglvnd-1.7.0             |       h47b2149_3         130 KB
+#10 9.548     libglx-1.7.0               |       h71acf41_3          77 KB
+#10 9.548     libgomp-15.2.0             |       h4751f2c_8         437 KB
+#10 9.548     libjpeg-turbo-3.1.3        |       h47b2149_0         607 KB
+#10 9.548     libllvm22-22.1.2           |       h0e0d5da_3        43.4 MB
+#10 9.548     libopengl-1.7.0            |       h4cac700_3          50 KB
+#10 9.548     libopenjpeg-2.5.4          |       h47b2149_2         228 KB
+#10 9.548     libpciaccess-0.19          |       h80b17e6_0          28 KB
+#10 9.548     libpng-1.6.56              |       h22898a0_0         243 KB
+#10 9.548     libpq-18.4                 |       h81741d5_1         2.7 MB
+#10 9.548     libsodium-1.0.21           |       h83fc4cd_1         287 KB
+#10 9.548     libtiff-4.7.2              |       h2b43d3b_0         449 KB
+#10 9.548     libwebp-base-1.6.0         |       hb7bb969_0         419 KB
+#10 9.548     libxkbcommon-1.13.2        |       h3199216_1         829 KB
+#10 9.548     llvmlite-0.47.0            |  py314hb8df7be_1        32.0 MB
+#10 9.548     matplotlib-3.11.0          |  py314h06a4308_0           7 KB
+#10 9.548     matplotlib-base-3.11.0     |  py314h54cb298_0         9.3 MB
+#10 9.548     mesalib-26.1.6             |       h3583ad3_0         6.9 MB
+#10 9.548     mkl-2025.0.0               |     h6d8faa4_942       113.4 MB
+#10 9.548     mkl-service-2.7.2          |  py314h365c7f6_0          75 KB
+#10 9.548     mkl_fft-2.3.2              |  py314h14d6ddd_0         178 KB
+#10 9.548     mkl_random-1.4.1           |  py314h973aee8_0         393 KB
+#10 9.548     mysql-common-9.7.0         |       h9e076cb_1         669 KB
+#10 9.548     mysql-libs-9.7.0           |       he5ffe59_1         1.3 MB
+#10 9.548     numba-0.65.1               |  py314h45d1962_1         5.5 MB
+#10 9.548     numpy-2.4.6                |  py314ha8834a8_0          20 KB
+#10 9.548     numpy-base-2.4.6           |  py314h7c74580_0         8.1 MB
+#10 9.548     openldap-2.6.12            |       h6d82be7_2         762 KB
+#10 9.548     openssl-3.5.8              |       h1b28b03_0         5.5 MB
+#10 9.548     pillow-12.3.0              |  py314h652d24c_0         1.1 MB
+#10 9.548     pixman-0.46.4              |       h86ba9f7_1         329 KB
+#10 9.548     pyparsing-3.3.2            |  py314h06a4308_0         5.9 MB
+#10 9.548     pyqt-6.11.0                |  py314h0eb9b55_0         4.5 MB
+#10 9.548     pyqt6-sip-13.11.1          |  py314h47b2149_0          78 KB
+#10 9.548     python-dateutil-2.9.0post0 |  py314h06a4308_2         312 KB
+#10 9.548     qtbase-6.11.0              |       h86c083e_4        12.1 MB
+#10 9.548     qtdeclarative-6.11.0       |       h89ee561_1        20.2 MB
+#10 9.548     qtsvg-6.11.0               |       hbecefc2_1         329 KB
+#10 9.548     qttools-6.11.0             |       h0af0a4d_1         6.8 MB
+#10 9.548     qtwayland-6.11.0           |       h84ca50f_1         968 KB
+#10 9.548     qtwebchannel-6.11.0        |       h7ebffc9_1         155 KB
+#10 9.548     qtwebsockets-6.11.0        |       h03d4248_1         130 KB
+#10 9.548     scipy-1.18.1               |  py314h3d0cd3c_0        24.1 MB
+#10 9.548     sip-6.15.1                 |  py314he6c97cb_0         712 KB
+#10 9.548     six-1.17.0                 |  py314h06a4308_0          39 KB
+#10 9.548     spirv-tools-2026.1         |       h24d9097_0         2.2 MB
+#10 9.548     tbb-2022.0.0               |       hdb19cb5_0         188 KB
+#10 9.548     tbb-devel-2022.0.0         |       hdb19cb5_0         1.1 MB
+#10 9.548     tornado-6.5.8              |  py314h47b2149_0         900 KB
+#10 9.548     wayland-1.25.0             |       h9bbe5da_0         325 KB
+#10 9.548     xcb-util-0.4.1             |       h5eee18b_2          19 KB
+#10 9.548     xcb-util-cursor-0.1.6      |       h9d8ba18_0          20 KB
+#10 9.548     xcb-util-image-0.4.1       |       hb2b27ac_0          23 KB
+#10 9.548     xcb-util-keysyms-0.4.1     |       h5eee18b_0          13 KB
+#10 9.548     xcb-util-renderutil-0.3.10 |       h5eee18b_0          16 KB
+#10 9.548     xcb-util-wm-0.4.2          |       h5eee18b_0          55 KB
+#10 9.548     xkeyboard-config-2.48      |       h658fd9e_1         943 KB
+#10 9.548     xorg-libice-1.1.2          |       h0525522_1          57 KB
+#10 9.548     xorg-libsm-1.2.6           |       h984eb1c_1          26 KB
+#10 9.548     xorg-libxext-1.3.7         |       h1ce37a7_0          48 KB
+#10 9.548     xorg-libxfixes-6.0.2       |       h5f4defd_0          19 KB
+#10 9.548     xorg-libxrandr-1.5.5       |       he366e75_0          28 KB
+#10 9.548     xorg-libxrender-0.9.12     |       h5f4defd_1          32 KB
+#10 9.548     xorg-libxshmfence-1.3.3    |       h9b100fa_0          11 KB
+#10 9.548     xorg-libxxf86vm-1.1.7      |       hc450a19_0          17 KB
+#10 9.548     ------------------------------------------------------------
+#10 9.548                                            Total:       374.6 MB
+#10 9.548 
+#10 9.548 The following NEW packages will be INSTALLED:
+#10 9.548 
+#10 9.548   aom                pkgs/main/linux-64::aom-3.13.2-h664349e_0 
+#10 9.548   blas               pkgs/main/linux-64::blas-1.0-mkl 
+#10 9.548   cairo              pkgs/main/linux-64::cairo-1.18.4-ha82d1dd_1 
+#10 9.548   contourpy          pkgs/main/linux-64::contourpy-1.3.3-py314hdb19cb5_0 
+#10 9.548   cycler             pkgs/main/linux-64::cycler-0.12.1-py314h06a4308_0 
+#10 9.548   cyrus-sasl         pkgs/main/linux-64::cyrus-sasl-2.1.28-h2f687bf_5 
+#10 9.548   dav1d              pkgs/main/linux-64::dav1d-1.5.3-h12c9f22_1 
+#10 9.548   fontconfig         pkgs/main/linux-64::fontconfig-2.18.2-h4dd9078_0 
+#10 9.548   fonttools          pkgs/main/linux-64::fonttools-4.63.0-py314h47b2149_0 
+#10 9.548   freetype           pkgs/main/linux-64::freetype-2.14.1-hf5b9546_0 
+#10 9.548   graphite2          pkgs/main/linux-64::graphite2-1.3.15-h9ba177b_0 
+#10 9.548   harfbuzz           pkgs/main/linux-64::harfbuzz-12.3.0-h572a7f1_2 
+#10 9.548   intel-openmp       pkgs/main/linux-64::intel-openmp-2025.0.0-h06a4308_1172 
+#10 9.548   kiwisolver         pkgs/main/linux-64::kiwisolver-1.5.0-py314h7354ed3_0 
+#10 9.548   lcms2              pkgs/main/linux-64::lcms2-2.19.1-h425df66_1 
+#10 9.548   lerc               pkgs/main/linux-64::lerc-4.1.0-h7354ed3_2 
+#10 9.548   libavif            pkgs/main/linux-64::libavif-1.3.0-h2b90b00_1 
+#10 9.548   libcups            pkgs/main/linux-64::libcups-2.4.19-h23114ae_0 
+#10 9.548   libdeflate         pkgs/main/linux-64::libdeflate-1.22-h5eee18b_0 
+#10 9.548   libdrm             pkgs/main/linux-64::libdrm-2.4.134-h22c3c2f_1 
+#10 9.548   libegl             pkgs/main/linux-64::libegl-1.7.0-h4cac700_3 
+#10 9.548   libevent           pkgs/main/linux-64::libevent-2.1.13-h0bdef0d_1 
+#10 9.548   libgfortran        pkgs/main/linux-64::libgfortran-15.2.0-h166f726_8 
+#10 9.548   libgfortran5       pkgs/main/linux-64::libgfortran5-15.2.0-hc633d37_8 
+#10 9.548   libgl              pkgs/main/linux-64::libgl-1.7.0-hb0f338c_3 
+#10 9.548   libglib            pkgs/main/linux-64::libglib-2.88.3-ha16e27a_0 
+#10 9.548   libglvnd           pkgs/main/linux-64::libglvnd-1.7.0-h47b2149_3 
+#10 9.548   libglx             pkgs/main/linux-64::libglx-1.7.0-h71acf41_3 
+#10 9.548   libgomp            pkgs/main/linux-64::libgomp-15.2.0-h4751f2c_8 
+#10 9.548   libjpeg-turbo      pkgs/main/linux-64::libjpeg-turbo-3.1.3-h47b2149_0 
+#10 9.548   libllvm22          pkgs/main/linux-64::libllvm22-22.1.2-h0e0d5da_3 
+#10 9.548   libopengl          pkgs/main/linux-64::libopengl-1.7.0-h4cac700_3 
+#10 9.548   libopenjpeg        pkgs/main/linux-64::libopenjpeg-2.5.4-h47b2149_2 
+#10 9.548   libpciaccess       pkgs/main/linux-64::libpciaccess-0.19-h80b17e6_0 
+#10 9.548   libpng             pkgs/main/linux-64::libpng-1.6.56-h22898a0_0 
+#10 9.548   libpq              pkgs/main/linux-64::libpq-18.4-h81741d5_1 
+#10 9.548   libsodium          pkgs/main/linux-64::libsodium-1.0.21-h83fc4cd_1 
+#10 9.548   libtiff            pkgs/main/linux-64::libtiff-4.7.2-h2b43d3b_0 
+#10 9.548   libwebp-base       pkgs/main/linux-64::libwebp-base-1.6.0-hb7bb969_0 
+#10 9.548   libxkbcommon       pkgs/main/linux-64::libxkbcommon-1.13.2-h3199216_1 
+#10 9.548   llvmlite           pkgs/main/linux-64::llvmlite-0.47.0-py314hb8df7be_1 
+#10 9.548   matplotlib         pkgs/main/linux-64::matplotlib-3.11.0-py314h06a4308_0 
+#10 9.548   matplotlib-base    pkgs/main/linux-64::matplotlib-base-3.11.0-py314h54cb298_0 
+#10 9.548   mesalib            pkgs/main/linux-64::mesalib-26.1.6-h3583ad3_0 
+#10 9.548   mkl                pkgs/main/linux-64::mkl-2025.0.0-h6d8faa4_942 
+#10 9.548   mkl-service        pkgs/main/linux-64::mkl-service-2.7.2-py314h365c7f6_0 
+#10 9.548   mkl_fft            pkgs/main/linux-64::mkl_fft-2.3.2-py314h14d6ddd_0 
+#10 9.548   mkl_random         pkgs/main/linux-64::mkl_random-1.4.1-py314h973aee8_0 
+#10 9.548   mysql-common       pkgs/main/linux-64::mysql-common-9.7.0-h9e076cb_1 
+#10 9.548   mysql-libs         pkgs/main/linux-64::mysql-libs-9.7.0-he5ffe59_1 
+#10 9.548   numba              pkgs/main/linux-64::numba-0.65.1-py314h45d1962_1 
+#10 9.548   numpy              pkgs/main/linux-64::numpy-2.4.6-py314ha8834a8_0 
+#10 9.548   numpy-base         pkgs/main/linux-64::numpy-base-2.4.6-py314h7c74580_0 
+#10 9.548   openldap           pkgs/main/linux-64::openldap-2.6.12-h6d82be7_2 
+#10 9.548   pillow             pkgs/main/linux-64::pillow-12.3.0-py314h652d24c_0 
+#10 9.548   pixman             pkgs/main/linux-64::pixman-0.46.4-h86ba9f7_1 
+#10 9.548   pyparsing          pkgs/main/linux-64::pyparsing-3.3.2-py314h06a4308_0 
+#10 9.548   pyqt               pkgs/main/linux-64::pyqt-6.11.0-py314h0eb9b55_0 
+#10 9.548   pyqt6-sip          pkgs/main/linux-64::pyqt6-sip-13.11.1-py314h47b2149_0 
+#10 9.548   python-dateutil    pkgs/main/linux-64::python-dateutil-2.9.0post0-py314h06a4308_2 
+#10 9.548   qtbase             pkgs/main/linux-64::qtbase-6.11.0-h86c083e_4 
+#10 9.548   qtdeclarative      pkgs/main/linux-64::qtdeclarative-6.11.0-h89ee561_1 
+#10 9.548   qtsvg              pkgs/main/linux-64::qtsvg-6.11.0-hbecefc2_1 
+#10 9.548   qttools            pkgs/main/linux-64::qttools-6.11.0-h0af0a4d_1 
+#10 9.548   qtwayland          pkgs/main/linux-64::qtwayland-6.11.0-h84ca50f_1 
+#10 9.548   qtwebchannel       pkgs/main/linux-64::qtwebchannel-6.11.0-h7ebffc9_1 
+#10 9.548   qtwebsockets       pkgs/main/linux-64::qtwebsockets-6.11.0-h03d4248_1 
+#10 9.548   scipy              pkgs/main/linux-64::scipy-1.18.1-py314h3d0cd3c_0 
+#10 9.548   sip                pkgs/main/linux-64::sip-6.15.1-py314he6c97cb_0 
+#10 9.548   six                pkgs/main/linux-64::six-1.17.0-py314h06a4308_0 
+#10 9.548   spirv-tools        pkgs/main/linux-64::spirv-tools-2026.1-h24d9097_0 
+#10 9.548   tbb                pkgs/main/linux-64::tbb-2022.0.0-hdb19cb5_0 
+#10 9.548   tbb-devel          pkgs/main/linux-64::tbb-devel-2022.0.0-hdb19cb5_0 
+#10 9.548   tornado            pkgs/main/linux-64::tornado-6.5.8-py314h47b2149_0 
+#10 9.548   wayland            pkgs/main/linux-64::wayland-1.25.0-h9bbe5da_0 
+#10 9.548   xcb-util           pkgs/main/linux-64::xcb-util-0.4.1-h5eee18b_2 
+#10 9.548   xcb-util-cursor    pkgs/main/linux-64::xcb-util-cursor-0.1.6-h9d8ba18_0 
+#10 9.548   xcb-util-image     pkgs/main/linux-64::xcb-util-image-0.4.1-hb2b27ac_0 
+#10 9.548   xcb-util-keysyms   pkgs/main/linux-64::xcb-util-keysyms-0.4.1-h5eee18b_0 
+#10 9.548   xcb-util-renderut~ pkgs/main/linux-64::xcb-util-renderutil-0.3.10-h5eee18b_0 
+#10 9.548   xcb-util-wm        pkgs/main/linux-64::xcb-util-wm-0.4.2-h5eee18b_0 
+#10 9.548   xkeyboard-config   pkgs/main/linux-64::xkeyboard-config-2.48-h658fd9e_1 
+#10 9.548   xorg-libice        pkgs/main/linux-64::xorg-libice-1.1.2-h0525522_1 
+#10 9.548   xorg-libsm         pkgs/main/linux-64::xorg-libsm-1.2.6-h984eb1c_1 
+#10 9.548   xorg-libxext       pkgs/main/linux-64::xorg-libxext-1.3.7-h1ce37a7_0 
+#10 9.548   xorg-libxfixes     pkgs/main/linux-64::xorg-libxfixes-6.0.2-h5f4defd_0 
+#10 9.548   xorg-libxrandr     pkgs/main/linux-64::xorg-libxrandr-1.5.5-he366e75_0 
+#10 9.548   xorg-libxrender    pkgs/main/linux-64::xorg-libxrender-0.9.12-h5f4defd_1 
+#10 9.548   xorg-libxshmfence  pkgs/main/linux-64::xorg-libxshmfence-1.3.3-h9b100fa_0 
+#10 9.548   xorg-libxxf86vm    pkgs/main/linux-64::xorg-libxxf86vm-1.1.7-hc450a19_0 
+#10 9.548 
+#10 9.548 The following packages will be UPDATED:
+#10 9.548 
+#10 9.548   conda                              26.7.1-py314h06a4308_0 --> 26.7.2-py314h06a4308_0 
+#10 9.548   openssl                                  3.5.7-h1b28b03_0 --> 3.5.8-h1b28b03_0 
+#10 9.548 
+#10 9.548 
+#10 9.548 Proceed ([y]/n)? 
+#10 23.22 
+#10 23.22 Downloading and Extracting Packages: ...working... done
+#10 60.85 Preparing transaction: ...working... done
+#10 61.32 Verifying transaction: ...working... done
+#10 63.64 Executing transaction: ...working... done
+#10 67.97 
+#10 67.97 Channel "defaults" has the following notices:
+#10 67.97   [info] -- Thu Aug  6 00:00:00 2026
+#10 67.97   main-x (Anaconda's new authenticated channel) is now generally available, with thousands of additional packages from our secure supply chain. Get started at: https://anaconda.com/docs/getting-started/main-x?utm_source=channel_notices
+#10 67.97 
+#10 DONE 68.7s
+
+#11 [ 6/11] RUN conda install pytorch torchvision -c pytorch
+#11 2.577 Channels:
+#11 2.577  - pytorch
+#11 2.577  - defaults
+#11 2.577 Platform: linux-64
+#11 2.577 Collecting package metadata (repodata.json): ...working... done
+#11 7.512 Solving environment: ...working... done
+#11 8.575 
+#11 8.575 ## Package Plan ##
+#11 8.575 
+#11 8.575   environment location: /opt/conda
+#11 8.575 
+#11 8.575   added / updated specs:
+#11 8.575     - pytorch
+#11 8.575     - torchvision
+#11 8.575 
+#11 8.575 
+#11 8.575 The following packages will be downloaded:
+#11 8.575 
+#11 8.575     package                    |            build
+#11 8.575     ---------------------------|-----------------
+#11 8.575     fsspec-2026.7.0            |  py314h6fa48dc_0         663 KB
+#11 8.575     giflib-6.1.3               |       h621bd71_1          60 KB
+#11 8.575     gmp-6.3.0                  |       haace2f4_1         568 KB
+#11 8.575     gmpy2-2.3.1                |  py314h1cd8627_0         279 KB
+#11 8.575     libabseil-20260107.0       | cxx17_h6199ee8_0         1.3 MB
+#11 8.575     libprotobuf-6.33.5         |       h4435b4a_0         3.5 MB
+#11 8.575     libtorch-2.10.0            |cpu_mkl_h07c2ee9_103        81.6 MB
+#11 8.575     libuv-1.52.1               |       heb5a705_0         884 KB
+#11 8.575     mpc-1.3.1                  |       h5eee18b_0         129 KB
+#11 8.575     mpfr-4.2.1                 |       h5eee18b_0         821 KB
+#11 8.575     mpmath-1.3.0               |  py314h06a4308_0        1008 KB
+#11 8.575     networkx-3.6.1             |  py314h06a4308_0         3.2 MB
+#11 8.575     optree-0.19.1              |  py314h24d9097_0         500 KB
+#11 8.575     pytorch-2.10.0             |cpu_mkl_py314h1ccd91d_103        36.2 MB
+#11 8.575     sleef-3.9.0                |no_openmp_h0bf82d1_3         1.8 MB
+#11 8.575     sympy-1.14.0               |  py314h06a4308_1        14.6 MB
+#11 8.575     torchvision-0.25.0         |cpu_py314h4d4fe92_1         1.4 MB
+#11 8.575     ------------------------------------------------------------
+#11 8.575                                            Total:       148.5 MB
+#11 8.575 
+#11 8.575 The following NEW packages will be INSTALLED:
+#11 8.575 
+#11 8.575   fsspec             pkgs/main/linux-64::fsspec-2026.7.0-py314h6fa48dc_0 
+#11 8.575   giflib             pkgs/main/linux-64::giflib-6.1.3-h621bd71_1 
+#11 8.575   gmp                pkgs/main/linux-64::gmp-6.3.0-haace2f4_1 
+#11 8.575   gmpy2              pkgs/main/linux-64::gmpy2-2.3.1-py314h1cd8627_0 
+#11 8.575   libabseil          pkgs/main/linux-64::libabseil-20260107.0-cxx17_h6199ee8_0 
+#11 8.575   libprotobuf        pkgs/main/linux-64::libprotobuf-6.33.5-h4435b4a_0 
+#11 8.575   libtorch           pkgs/main/linux-64::libtorch-2.10.0-cpu_mkl_h07c2ee9_103 
+#11 8.575   libuv              pkgs/main/linux-64::libuv-1.52.1-heb5a705_0 
+#11 8.575   mpc                pkgs/main/linux-64::mpc-1.3.1-h5eee18b_0 
+#11 8.575   mpfr               pkgs/main/linux-64::mpfr-4.2.1-h5eee18b_0 
+#11 8.575   mpmath             pkgs/main/linux-64::mpmath-1.3.0-py314h06a4308_0 
+#11 8.575   networkx           pkgs/main/linux-64::networkx-3.6.1-py314h06a4308_0 
+#11 8.575   optree             pkgs/main/linux-64::optree-0.19.1-py314h24d9097_0 
+#11 8.575   pytorch            pkgs/main/linux-64::pytorch-2.10.0-cpu_mkl_py314h1ccd91d_103 
+#11 8.575   sleef              pkgs/main/linux-64::sleef-3.9.0-no_openmp_h0bf82d1_3 
+#11 8.575   sympy              pkgs/main/linux-64::sympy-1.14.0-py314h06a4308_1 
+#11 8.575   torchvision        pkgs/main/linux-64::torchvision-0.25.0-cpu_py314h4d4fe92_1 
+#11 8.575 
+#11 8.575 
+#11 8.575 Proceed ([y]/n)? 
+#11 10.48 
+#11 10.48 Downloading and Extracting Packages: ...working... done
+#11 32.01 Preparing transaction: ...working... done
+#11 32.44 Verifying transaction: ...working... done
+#11 33.91 Executing transaction: ...working... done
+#11 DONE 38.2s
+
+#12 [ 7/11] RUN pip install scikit-learn tqdm tensorflow keras tensorboardX xgboost lightgbm
+#12 1.637 Collecting scikit-learn
+#12 1.711   Downloading scikit_learn-1.9.1-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (9.3 kB)
+#12 1.726 Requirement already satisfied: tqdm in /opt/conda/lib/python3.14/site-packages (4.70.0)
+#12 1.842 ERROR: Could not find a version that satisfies the requirement tensorflow (from versions: none)
+#12 1.842 ERROR: No matching distribution found for tensorflow
+#12 ERROR: process "/bin/sh -c pip install scikit-learn tqdm tensorflow keras tensorboardX xgboost lightgbm" did not complete successfully: exit code: 1
+------
+ > [ 7/11] RUN pip install scikit-learn tqdm tensorflow keras tensorboardX xgboost lightgbm:
+1.637 Collecting scikit-learn
+1.711   Downloading scikit_learn-1.9.1-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (9.3 kB)
+1.726 Requirement already satisfied: tqdm in /opt/conda/lib/python3.14/site-packages (4.70.0)
+1.842 ERROR: Could not find a version that satisfies the requirement tensorflow (from versions: none)
+1.842 ERROR: No matching distribution found for tensorflow
+------
+
+ [33m1 warning found (use docker --debug to expand):
+[0m - JSONArgsRecommended: JSON arguments recommended for CMD to prevent unintended behavior related to OS signals (line 12)
+Dockerfile:7
+--------------------
+   5 |     RUN conda install scipy numpy matplotlib numba
+   6 |     RUN conda install pytorch torchvision -c pytorch
+   7 | >>> RUN pip install scikit-learn tqdm tensorflow keras tensorboardX xgboost lightgbm
+   8 |     RUN pip install pathfinding pyaml igraph ujson
+   9 |     RUN conda install pandas
+--------------------
+ERROR: failed to build: failed to solve: process "/bin/sh -c pip install scikit-learn tqdm tensorflow keras tensorboardX xgboost lightgbm" did not complete successfully: exit code: 1
