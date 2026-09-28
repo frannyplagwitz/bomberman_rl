@@ -3,19 +3,21 @@
 # only the small per-run results (checkpoint + episode CSV) are kept afterward.
 
  
-RUN="train"           # "train" or "test"
+RUN="test"           # "train" or "test"
 N_RUNS=3
-TASK_ROUNDS=10
+TASK_ROUNDS=2000
 SCENARIO="classic"
-AGENTS="rule_based_agent"
+AGENTS=""
 BEHAVIOR="peaceful"
 MODEL="lut"
-TASK_LABEL="task1"   # change per task — names the results folder; test mode reuses whatever run_1..run_N a prior "train" pass under this same TASK_LABEL already produced
- 
+TASK_LABEL="task1_lut"   # change per task — names the results folder; test mode reuses whatever run_1..run_N a prior "train" pass under this same TASK_LABEL already produced
+
+
 export ELSENZ_BEHAVIOR=$BEHAVIOR
 export ELSENZ_MODEL_TYPE=$MODEL
 export ELSENZ_EPISODES_PER_UPDATE=4
- 
+export ELSENZ_SCENARIO=$SCENARIO
+
 CORES=$(python -c "import os; print(os.cpu_count())")
 THREADS_PER_RUN=$(( CORES / N_RUNS ))
 [ "$THREADS_PER_RUN" -lt 1 ] && THREADS_PER_RUN=1
@@ -24,8 +26,25 @@ PROJECT_ROOT="$(pwd)"
 RESULTS_DIR="$PROJECT_ROOT/results/${TASK_LABEL}"
 mkdir -p "$RESULTS_DIR"
  
+# Wait for each background job to finish and report which ones failed
+wait_all() {
+  local failed=0
+  for k in "${!PIDS[@]}"; do
+    if ! wait "${PIDS[$k]}"; then
+      echo "  run_${RUN_IDS[$k]} FAILED — see its log in $RESULTS_DIR/run_${RUN_IDS[$k]}/"
+      failed=1
+    fi
+  done
+  return $failed
+}
+
+PIDS=()
+RUN_IDS=()
+
+
+# Running parallel training runs
 if [ "$RUN" = "train" ]; then
- 
+
   for i in $(seq 1 $N_RUNS); do
     RUN_DIR="$RESULTS_DIR/run_$i"
     mkdir -p "$RUN_DIR"
@@ -67,14 +86,16 @@ elif [ "$RUN" = "test" ]; then
     (
       export OMP_NUM_THREADS=$THREADS_PER_RUN
       export MKL_NUM_THREADS=$THREADS_PER_RUN
- 
-      python run_eval.py --run-dir "$RUN_DIR" \
+
+      python run_eval.py --run-dir "$RUN_DIR" --task "$TASK_LABEL"  \
         > "$RUN_DIR/eval_${i}.log" 2>&1
     ) &
+    PIDS+=($!); RUN_IDS+=($i)
+    sleep 2
   done
  
   echo "Launched checkpoint evaluation for $N_RUNS runs, waiting..."
-  wait
+  wait_all
  
   echo "Evaluation complete. Comparison CSVs:"
   for i in $(seq 1 $N_RUNS); do

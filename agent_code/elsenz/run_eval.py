@@ -7,25 +7,43 @@ import json
 import os
 import re
 import shutil
+import sys
 import subprocess
 import argparse
 
 import pandas as pd
 
 CKPT_PATTERN = "actor-critic-lut-peaceful-classic-*-rounds-1-opponents-ep*.pt"
-EVAL_FILENAME = "elsenz-lut-peaceful-classic.pt"
 AGENT_NAME = "elsenz"
+
+# Absolute, so the eval command still resolves after --run-dir chdir()s somewhere else.
+MAIN_PY = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "main.py")
 
 STATS_DIR = "eval_stats"
 OUT_DIR = "eval_results"
 N_ROUNDS = 100
 
+# Defined once so the count below can't drift out of sync with EVAL_FILENAME.
+# Capped at settings.MAX_AGENTS - 1 (i.e. 3): the engine asserts on the agent count, so
+# asking for more opponents than that makes every eval run die before the first step.
+MAX_AGENTS = 4  # keep in sync with ../../settings.py
+EVAL_OPPONENTS = ["random_agent"] * (MAX_AGENTS - 1)
+
+# The staged checkpoint has to be named exactly what callbacks.setup() will look for when
+# it runs the eval command below, i.e. the same
+# "actor-critic-<model>-<behavior>-<scenario>-<n>-rounds-<m>-opponents.pt" scheme, derived
+# from THIS script's own --n-rounds/--agents. A name setup() never looks up (the old
+# "elsenz-lut-peaceful-classic.pt") loads nothing, so every checkpoint would silently be
+# scored as a freshly-initialized agent.
+EVAL_FILENAME = (f"actor-critic-lut-peaceful-classic"
+                 f"-{N_ROUNDS}-rounds-{len(EVAL_OPPONENTS)}-opponents.pt")
+
 
 def build_eval_cmd(stats_path: str):
     """Command to run one checkpoint's evaluation, saving results to stats_path."""
     return [
-        "python", "../../main.py", "play",
-        "--agents", AGENT_NAME, "random_agent", "random_agent", "random_agent", "random_agent", "random_agent",
+        sys.executable, MAIN_PY, "play",
+        "--agents", AGENT_NAME, *EVAL_OPPONENTS,
         "--scenario", "classic",
         "--n-rounds", str(N_ROUNDS), "--no-gui",
         "--save-stats", stats_path,
@@ -99,7 +117,18 @@ def main():
                          help="Column to sort the comparison table by, descending")
     parser.add_argument("--out", default="checkpoint_comparison.csv",
                          help="Where to write the summary CSV")
+    parser.add_argument("--run-dir", default=None,
+                         help="Directory holding this run's checkpoints. Every path below "
+                              "(checkpoint glob, eval_stats/, the summary CSV) is relative "
+                              "to it, so parallel_run.sh can evaluate each run_N folder "
+                              "independently.")
     args = parser.parse_args()
+
+    if args.run_dir:
+        if not os.path.isdir(args.run_dir):
+            print(f"--run-dir {args.run_dir!r} is not a directory")
+            return
+        os.chdir(args.run_dir)
 
     os.makedirs(STATS_DIR, exist_ok=True)
     os.makedirs(OUT_DIR, exist_ok=True)

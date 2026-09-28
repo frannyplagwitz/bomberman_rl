@@ -17,6 +17,7 @@ EPISODE_LOG_FIELDS = [
     "terminal_action", "shaped_reward", "critic_value_pred", "value_error",
     "total_loss", "critic_loss", "mean_reward", "entropy", "bomb_masked",
     "bomb_legal_not_taken", "trapped_enemy", "trapped_self"
+    # "total_loss", "critic_loss", "mean_reward", "entropy"
 ]
 
 class EpisodeCSVLogger:

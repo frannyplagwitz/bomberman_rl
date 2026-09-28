@@ -15,8 +15,9 @@ EPISODE_LOG_FIELDS = [
     "useful_rate", "crates_destroyed", "coins_collected", "killed_self",
     "got_killed", "killed_opponent", "opponent_killed", "survived_round",
     "terminal_action", "shaped_reward", "critic_value_pred", "value_error",
-    "total_loss", "critic_loss", "mean_reward", "entropy", "bomb_masked",
-    "bomb_legal_not_taken", "trapped_enemy", "trapped_self"
+    "total_loss", "critic_loss", "mean_reward", "entropy",
+    "won_round", "won_by_elimination", "won_by_score",
+    "tiles_visited", "map_coverage",
 ]
 
 class EpisodeCSVLogger:

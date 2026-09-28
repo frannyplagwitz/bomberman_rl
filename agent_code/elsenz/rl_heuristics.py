@@ -4,9 +4,14 @@
 """
 import os
 import torch 
+import torch.nn.functional as F
+import torch.optim as optim
 import numpy as np
 import logging
 
+from torch.distributions import Categorical
+
+from .callbacks import state_to_features
 from . import spatial_feature_extractor as spatial
 
 ACTION_NAMES = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'BOMB', 'WAIT']
@@ -243,7 +248,7 @@ def compute_potential(game_state: dict, potential_weights: dict, visited_tiles: 
                 targets=[opponent], bomb_positions=bomb_positions, 
                 opponents = op_opponents, explosion_map=explosion_map)
             
-            d_opponent = res[0] if (res is not None and res[0] != float('inf')) else None
+            d_opponent = res[0] if (res is not None and res[0] != float('inf')) else None # it might be res[1] - where does it come from?
             
 
             if d_opponent is not None: 
@@ -345,7 +350,7 @@ def compute_reward(game_state: dict, next_game_state: dict, events: list, termin
 class TabularQAgent: 
     """Tabular Q-learning handler"""
     
-    def __init__(self, model, gamma: float=0.99, alpha: float=0.1, 
+    def __init__(self, model, gamma: float=0.99, alpha: float=0.1, model_type: str="lut", 
                  behavior: str="peaceful", base_rewards: dict = None, 
                  potential_weights: dict = None, logger: logging.Logger = None, 
                  step_logger: logging.Logger = None):
@@ -356,6 +361,7 @@ class TabularQAgent:
 
         
         self.model = model 
+        self.model_type = model_type 
         self.gamma = gamma 
         self.alpha = alpha 
         self.behavior = behavior
@@ -409,7 +415,7 @@ class TabularQAgent:
         if not terminal and next_game_state is not None:
             from .callbacks import action_mask
             next_legal_mask = torch.tensor(action_mask(next_game_state), dtype=torch.bool)
-        
+
         # Calculate TD error 
         td_error = self.model.td_update(
             state_idx=state_idx, action=action, reward=reward,
@@ -417,9 +423,15 @@ class TabularQAgent:
             alpha=self.alpha, gamma=self.gamma,
             next_legal_mask=next_legal_mask)
 
-        self._episode_td_errors.append(td_error)
+        self._episode_td_errors.append(abs(td_error))
         self._episode_rewards.append(reward)
 
+        self.step_logger.debug(
+            f"[Q-UPDATE] state={state_idx} action={action} reward={reward:+.4f}"
+            f"next_state={next_state_idx} termimal={terminal} td_error={td_error:+.4f}"
+            f"episilon={epsilon:.4f}")
+        
+        # If terminal make sure to flush the episode 
         if terminal:
             self.flush_episode(epsilon)
 

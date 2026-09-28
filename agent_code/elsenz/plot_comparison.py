@@ -5,7 +5,8 @@ plots rolling-average comparisons across runs.
 
 Usage:
     python plot_comparison.py logs/episodes-run1.csv logs/episodes-run2.csv \
-        --labels "eps=300" "eps=2500" --window 15 --out plots/comparison
+        v1:--labels "eps=300" "eps=2500" --window 15 --out plots/comparison
+        v2:--labels "wasteful=-0.4" "wasteful=-0.3" --window 15 --out plots/comparison
 """
 import argparse
 import os
@@ -26,6 +27,7 @@ def load_runs(paths, labels=None):
         df = pd.read_csv(path)
         df["run_label"] = label
         df = df.sort_values("episodes").reset_index(drop=True)
+        # df = df.sort_values("episode").reset_index(drop=True) check if it is singular or plural
         frames.append(df)
 
     return pd.concat(frames, ignore_index=True)
@@ -35,8 +37,10 @@ def _plot_rolling_metric(df, column, window, ylabel, title, out_path):
     plt.figure(figsize=(9, 5))
     for label, sub in df.groupby("run_label", sort=False):
         sub = sub.sort_values("episodes")
+        # sub = sub.sort_values("episode") #singular/plural?
         rolling = sub[column].rolling(window, min_periods=1).mean()
         plt.plot(sub["episodes"], rolling, label=label)
+        # plt.plot(sub["episode"], rolling, label=label) # singular/plural?
 
     plt.xlabel("Episode")
     plt.ylabel(ylabel)
@@ -53,8 +57,10 @@ def _plot_rolling_rate(df, event_column, window, ylabel, title, out_path):
     plt.figure(figsize=(9, 5))
     for label, sub in df.groupby("run_label", sort=False):
         sub = sub.sort_values("episodes")
+        # sub = sub.sort_values("episode")
         rolling_rate = 100.0 * sub[event_column].rolling(window, min_periods=1).mean()
         plt.plot(sub["episodes"], rolling_rate, label=label)
+        # plt.plot(sub["episode"], rolling_rate, label=label)
 
     plt.xlabel("Episode")
     plt.ylabel(ylabel)
@@ -115,6 +121,9 @@ def plot_comparison(df: pd.DataFrame, window: int, out_dir: str):
                        "Opponent kill rate (%)", "Opponent kill rate",
                        os.path.join(out_dir, "compare_killed_opponent_rate.png"))
 
+    # NB: the episode CSV's "opponent_killed" column is what the LUT branch used to call
+    # "opponent_eliminated" (see train.py) - it already covers any opponent elimination,
+    # including mutual kills, so there is no separate plot for the old name.
     _plot_rolling_rate(df, "opponent_killed", window,
                        "Opponent-death rate (%)", "Opponent death rate",
                        os.path.join(out_dir, "compare_opponent_death_rate.png"))
@@ -149,8 +158,8 @@ def main():
                          help="one label per CSV, in the same order (defaults to filenames)")
 
     parser.add_argument("--window", type=int, default=15,
-                         help="rolling-average window in episodes (default=15)")
-
+                         help="rolling-average window in episodes (default 15, matching the "
+                              "15-round bucketing used throughout this project's analysis)")
     parser.add_argument("--out", default="plots/comparison", help="output directory for PNGs")
     args = parser.parse_args()
 

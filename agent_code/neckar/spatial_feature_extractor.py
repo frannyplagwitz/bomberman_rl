@@ -188,9 +188,12 @@ def build_bomb_timer_map(field: np.ndarray, bombs: list )  -> np.ndarray:
 
 # Entity Tracking Functions (Agent / Opponent)
 
-def evaluate_safety(field: np.ndarray, entity_pos: tuple[int, int], 
-                    danger_tiles: set[tuple[int, int]], bomb_positions: set[tuple[int, int]],
-                    opponents: set[tuple[int, int]], explosion_map: np.ndarray = None, 
+def evaluate_safety(field: np.ndarray,
+                    entity_pos: tuple[int, int], 
+                    danger_tiles: set[tuple[int, int]], 
+                    bomb_positions: set[tuple[int, int]],
+                    opponents: set[tuple[int, int]], 
+                    explosion_map: np.ndarray = None, 
                     bombs: list = None) -> tuple[float, tuple[int, int], bool]:
     
     """ Evaluates the path to safety for any moving entity (agent or enemy)
@@ -299,7 +302,7 @@ def is_bomb_useful(field: np.ndarray, agent_pos: tuple[int, int],
              
         agent_pos (tuple[int, int]): Position of the agent on the field
         opponents (set[tuple[int, int]]): Set of opponents on the field 
-        
+
     Returns:
         bool: True if the bomb was useful, false otherwise 
     """
@@ -521,8 +524,11 @@ def extract_spatial_features(game_state) -> np.ndarray:
                                           explosion_map, bombs)
 
     # If danger, normalize the steps to safety (max is is bomb range + 1)
+    
+    safe_range = s.BOMB_POWER + 1
+    
     if in_danger == 1.0: 
-        steps_to_safety_norm = min(steps, 5.0) / 5.0 if steps != float('inf') else 1.0
+        steps_to_safety_norm = min(steps, safe_range) / safe_range if steps != float('inf') else 1.0
         
         # Map (dx, dy) to direction index 
         directions = DIRECTIONS
@@ -619,40 +625,9 @@ def get_distance_nearest_safety(field: np.ndarray, agent_pos: tuple[int, int],
                                 bombs: list, opponents: list = None, 
                                 explosion_map: np.ndarray = None) -> float: 
     
-    """Get distance to nearest safe tile 
-    
-    Args:
-        
-        field (np.ndarray): 2D array of the current environment, each tuple contains value of
-                            element on the tile: 
-                            
-            -1: Indestructable/inaccessible tile (wall/pillar)
-             0: Free tile 
-             1: Tile with a crate
-        
-        agent_pos (tuple[int, int]): position of the agent on the field
-        
-        bombs (list): list of bombs on the field 
-            Tuple Contents: 
-                bomb_pos: bomb position 
-                timer: Steps in timer, max is determined by settings.MAX_TIMER
-            
-        opponents(list): list of opponents on the field 
-             
-        explosion_map (np.ndarray): 2D array of the scene where each tuple contains a 
-                                    value corresponding to explosion. 
-            Defaults to None
-            
-            0: Tile is not exploding 
-            > 0: Tile is exploding 
-
-    Returns:
-        distance to nearest safe tile
-    """
-    
     bomb_positions = get_bomb_positions(bombs)
-    danger_tiles   = build_danger_map(field, bombs, explosion_map)
-    opponents_set  = set(opponents) if opponents else set() 
+    danger_tiles = build_danger_map(field, bombs, explosion_map)
+    opponents_set = set(opponents) if opponents else set() 
     
     steps, _, _ = evaluate_safety(
         field, agent_pos, danger_tiles, 
@@ -661,21 +636,196 @@ def get_distance_nearest_safety(field: np.ndarray, agent_pos: tuple[int, int],
     
     return steps 
  
- 
-def tile_blocked_by_opponent(tile: tuple[int, int], opponents: set[tuple[int, int]], steps: int) -> bool: 
-    """Checks if tile is blocked/can be blocked by an opponent
-    Will be blocked if opponent could walk there within defined steps
+    
+def get_distance_nearest_danger(
+    field: np.ndarray, 
+    agent_pos: tuple[int, int], 
+    bombs: list, 
+    opponents: list, 
+    explosion_map: np.ndarray = None) -> float: 
+    
+    """ Find the distance to the nearest danger tile 
     
     Args: 
-           tile (tuple[int, int]): tile on field checking
-           opponents(set[tuple[int, int]]): list of opponents (to the entity) on the field 
-           steps: total steps it takes for agent to get to that tile 
+    
+        field (np.ndarray): 2D array of the current environment, each tuple contains value of element on the tile: 
+                -1: Indestructable/inaccessible tile (wall/pillar)
+                 0: Free tile 
+                 1: Tile with a crate
+                 
+        agent_pos (tuple[int, int]): position of the agent in the field 
+                                
+        bombs (list): list of bombs on the field
+            Tuple Contents: 
+                bomb_pos: bomb position 
+                timer: Steps in timer, max is determined by settings.MAX_TIMER
+
+        opponents(list): list of opponents on the field 
+        opponents (list[tuple[int, int]]): list of opponents on the field
+
+        explosion_map (np.ndarray): 2D array of the scene where each tuple contains a 
+                                    value corresponding to explosion. 
+            Defaults to None
            
-    Returns: true if tile is blocked/can be blocked by an opponent, false otherwise
+            0: Tile is not exploding 
+            > 0: Tile is exploding 
+
+    Returns:
+        float: distance from agent_pos to nearest dangerous tile in steps
+    """
+
+    
+    max_safety_threshold = s.BOMB_POWER + 1 # first step outside of bomb radius in a direction
+    bomb_positions = get_bomb_positions(bombs)
+    opponents_set = set(opponents) if opponents else set()  # opponents excluding duplicates
+    danger_tiles   = build_danger_map(field, bombs, explosion_map)
+    opponents_set  = set(opponents) if opponents else set() 
+    
+    
+    # If the entity is safe, return the distance to the nearest danger tile 
+    # the max value will be as soon as the entity is outside of the blast radius (max safety)
+    if agent_pos not in danger_tiles: 
+
+        # If the entity is safe, check how far it is away from the danger. 
+        # Return distance clipped to the max safety threshold for normalization purposes
+        steps_to_danger, _, _ =  evaluate_safety(field, agent_pos, danger_tiles, 
+                                              bomb_positions, 
+                                              opponents_set, 
+                                              explosion_map, bombs)
+        
+        return min(max_safety_threshold, steps_to_danger)
+ 
+ 
+    # If in danger, check if the agent can escape
+    steps_to_safety, _, is_trapped = evaluate_safety(field, agent_pos, danger_tiles, 
+                                                     bomb_positions, 
+                                                     opponents_set, 
+                                                     explosion_map, bombs)
+    
+
+    # If trapped, no potential of escaping, so return 0
+    if is_trapped: 
+        return 0.0
+    
+    # Use a timer map to determine the margin relative to a bomb hitting the agent's tile
+    timer_map = build_bomb_timer_map(field, bombs)
+    tile_timer = timer_map[agent_pos[0], agent_pos[1]]
+    
+    margin = max(0.0, float(tile_timer - steps_to_safety))
+    return min(max_safety_threshold, margin)
+
+
+def is_move_safe(field: np.ndarray, 
+                 next_pos: tuple[int, int], 
+                 bombs: list,
+                 opponents: list, 
+                 explosion_map: np.ndarray = None) -> bool: 
+    
+    """
+    Checks if a given move is safe
+    Args: 
+        field (np.ndarray): 2D array of the current environment, each tuple contains value of element on the tile: 
+            -1: Indestructable/inaccessible tile (wall/pillar)
+             0: Free tile 
+             1: Tile with a crate
+        
+        next_pos (tuple[int, int]): position planning to move to 
+                
+        bombs (list): bombs on the field 
+            Tuple contents: 
+                bomb_pos: position of the bomb on the field 
+                steps: timer steps, max value is set by settings.MAX_TIMER
+                
+        opponents(list): list of opponents on the field 
+             
+        explosion_map (np.ndarray): 2D array of the scene where each tuple contains a value corresponding to explosion. 
+            Defaults to None
+            
+            0: Tile is not exploding 
+            > 0: Tile is exploding 
+            
+            
+    Returns:
+        bool: True if the move is safe, False otherwise
     """
     
+    # Check that next position is currently in bounds
+    nx, ny = next_pos
+    if not (0 <= nx < field.shape[0] and 0 <= ny < field.shape[1]):
+        return False 
+    
+    
+    # Get the bomb positions 
+    bomb_positions = get_bomb_positions(bombs)
+    opponents_set  = set(opponents) if opponents else set() # exclude duplicate opponents
+    
+    
+    # Check if the tile is open 
+    if not is_tile_open(field, next_pos,  bomb_positions, opponents_set, explosion_map):
+            return False 
+        
+    # If the next move isn't projected to be in a blast radius, 100% safe
+    danger_tiles = build_danger_map(field, bombs, explosion_map)
+    
+    if next_pos not in danger_tiles: 
+        return True 
+    
+    # If next move is in the blast radius, will the agent be able to escape in time after its step
+    _, _, is_trapped = evaluate_safety(
+        field, next_pos, danger_tiles, 
+        bomb_positions, opponents_set, 
+        explosion_map, bombs)
+    
+    # If is trapped, super danger 
+    return not is_trapped
+
+
+def tile_blocked_by_opponent(tile: tuple[int, int], opponents: set[tuple[int, int]], steps: int) -> bool: 
+    """Checks if tile is blocked/can be blocked by an opponent
+    Will be blocked if opponent could walk there within the given number of steps
+    (Manhattan distance <= steps)
+    
+    Args: 
+        tile (tuple[int, int]): tile on the field being checked
+        opponents (set[tuple[int, int]]): opponents (to the entity) on the field
+        steps (int): total steps it takes the agent to reach that tile
+        
+    Returns: True if the tile is or can be blocked by an opponent, False otherwise
+    """
     if not opponents: 
         return False
     
     tx, ty = tile 
     return any(abs(tx - ox) + abs(ty - oy) <= steps for ox, oy in opponents)
+
+
+def total_escape_exits(field: np.ndarray, entity_pos: tuple[int, int], 
+                       bomb_positions: set[tuple[int, int]] = None, 
+                       opponents: set[tuple[int, int]] = None, 
+                       explosion_map: np.ndarray = None, 
+                       depth: int = 5) -> int: 
+    
+    """Finds open tiles reachable from entity_pos, ignoring bomb timers
+    """
+    
+    visited = {entity_pos}
+    queue = deque([(entity_pos, 0)])
+    
+    while queue: 
+        (x, y), dist = queue.popleft()
+        
+        # If still inside depth of check, continue
+        if dist >= depth: 
+            continue 
+        
+        # Look at neighbors in direction, if open and not already visited, add to BFS queue
+        for dx, dy in DIRECTIONS: 
+            neighbor = (x + dx, y + dy)
+
+            if (neighbor not in visited and 
+                is_tile_open(field, neighbor, bomb_positions, 
+                             opponents, explosion_map)): 
+                visited.add(neighbor)
+                queue.append((neighbor, dist + 1))
+    
+    return len(visited) - 1

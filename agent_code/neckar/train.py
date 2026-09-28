@@ -13,7 +13,7 @@ from .agent_behavior import BASE_REWARDS, POTENTIAL_WEIGHTS
 from .rl_heuristics import PPOAgent
 
 
-from .callbacks import state_to_features, features_to_tensor, get_scenario, get_num_opponents, get_rounds
+from .callbacks import state_to_features, features_to_tensor, get_scenario, get_num_opponents, get_rounds, get_curr_epsilon
 from . import spatial_feature_extractor as spatial
 from .episode_logger import EpisodeCSVLogger, make_run_id
 
@@ -45,6 +45,23 @@ def setup_training(self):
     :model_type: model used for training, default is lookup tables (lut)
     :param behavior: behavior that agent should use (peaceful vs. aggressive), default is peaceful 
     """
+
+    # self.logger.info("Setting up training for NECKAR agent")
+    # if torch.cuda.is_available():
+    #     self.logger.info("CUDA is available, using GPU for training")
+    #     self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    # NECKAR_SEED seeds torch/numpy (network init, PPO's stochastic action sampling) -
+    # separate from main.py's own --seed, which only seeds environment.py's `self.rng`
+    # (arena/coin layout, agent-to-corner spawn permutation). Without this, two runs with
+    # different --seed values would get different game layouts but the same network
+    # initialization and exploration trajectory - not truly independent seeds. Both need
+    # setting for a seed sweep to actually sample different training runs.
+    neckar_seed = os.environ.get('NECKAR_SEED')
+    if neckar_seed is not None:
+        torch.manual_seed(int(neckar_seed))
+        np.random.seed(int(neckar_seed))
+
     # Store model type and behavior 
     self.behavior = getattr(self, "behavior", "peaceful")
     self.model_type = getattr(self, "model_type", "mlp") 
@@ -99,8 +116,17 @@ def setup_training(self):
     # Initialize CSV run and episode log path
     # The name will depend on whether or not we are training
  
-    self.run_id = getattr(self, "run_id", None) or make_run_id()
- 
+    # NECKAR_RUN_ID lets an external caller (e.g. bo_search.py, launching many trials as
+    # separate subprocesses, possibly in parallel) pin an exact, traceable id instead of
+    # relying on make_run_id()'s second-granularity timestamp, which two subprocesses
+    # starting in the same second would collide on.
+    #
+    # Assigned exactly once: an earlier unconditional `self.run_id = ... or make_run_id()`
+    # here meant the getattr() below already found a value, so the env var was never read
+    # and bo_search's run_id never reached the CSV filename its scorer looks the run up by.
+    self.run_id = (getattr(self, "run_id", None)
+                   or os.environ.get("NECKAR_RUN_ID")
+                   or make_run_id())
     episode_log_path = os.path.join(
         BASE_DIR, "logs",
         f"episodes-{self.model_type}-{self.behavior}-{self.scenario}"
@@ -110,14 +136,20 @@ def setup_training(self):
 
     self.ppo_agent = PPOAgent(
         model=self.model,
-        lr=lr_start, lr_end=lr_end, lr_decay_updates=lr_decay_updates,
-        gamma=0.99, clip_eps=0.2,
-        model_type=self.model_type, behavior=self.behavior,
+        lr=lr_start,
+        lr_end=lr_end,
+        lr_decay_updates=lr_decay_updates,
+        gamma=0.99,
+        clip_eps=0.2,
+        model_type=self.model_type,
+        behavior=self.behavior,
         potential_weights=POTENTIAL_WEIGHTS.get(self.behavior, {}),
         base_rewards=BASE_REWARDS.get(self.behavior, {}),
-        entropy_start=entropy_start, entropy_end=entropy_end,
+        entropy_start=entropy_start,
+        entropy_end=entropy_end,
         entropy_decay_updates=entropy_decay_updates,
-        logger=self.logger, step_logger=self.step_logger)
+        logger=self.logger,
+        step_logger=self.step_logger)
 
     
     # Example: Setup an array that will note transition tuples
@@ -143,7 +175,7 @@ def detect_custom_events(self, old_game_state: dict, self_action: str, new_game_
     
     # If agent did anything, add step penalty event 
     # Done to make sure agent will finish game before max steps if possible 
-    # Saves computation time, reduces risk of agent doing something dumb
+    # Reasoning: Saves computation time, reduces risk of agent doing something dumb
     if self_action: 
         custom_events.append("STEP_PENALTY")
                    
@@ -213,38 +245,36 @@ def detect_custom_events(self, old_game_state: dict, self_action: str, new_game_
     
     # Look through POV of each opponent in new state
     for name, new_opp_pos in new_opponents_by_name.items(): 
-        
-        # Get list of opponent's opponents for spatial
-        # extractor calls
         new_op_opponents = {op for op in new_entities if op != new_opp_pos}
         
-        # Check if the opponent is currently trapped 
-        opponent_is_trapped = spatial.is_entity_trapped(
+        is_trapped = spatial.is_entity_trapped(
             field= new_field, entity_pos=new_opp_pos,
             bombs=new_bombs, opponents=new_op_opponents, 
             explosion_map=new_explosion_map)
-          
+        
         # Find the old position of the opponent,
         # if doesn't exist, not trapped 
         old_opp_pos = old_opponents_by_name.get(name)
         if old_opp_pos is None: 
-            opponent_was_trapped = False
+            # Opponent wasn't visible
+            was_trapped = False
             
         # Check if opponent was trapped in previous state 
         else:
             old_op_opponents = {op for op in old_entities if op != old_opp_pos}
             
-            opponent_was_trapped = spatial.is_entity_trapped(
+            was_trapped = spatial.is_entity_trapped(
                 field=old_field, entity_pos=old_opp_pos, 
                 bombs=old_bombs, opponents=old_op_opponents, 
                 explosion_map=old_explosion_map)
     
-        # If opponent wasn't trapped in old state but is now, opponent trapped event
-        if not opponent_was_trapped and opponent_is_trapped:
+        # If wasn't trapped in old state but is now, opponent trapped event
+        if not was_trapped and is_trapped:
             custom_events.append("TRAPPED_ENEMY")
             self.episode_trapped_enemy += 1    
         
-         
+        
+        
     # Check if our agent is trapped in new state
     is_trapped = spatial.is_entity_trapped(
         field = new_field, entity_pos=new_pos, 
@@ -335,8 +365,7 @@ def game_events_occurred(self, old_game_state: dict, self_action: str,
         self.episode_bomb_legal_not_taken += 1
 
     elif bomb_legal is False:
-        # BOMB wasn't even offered as a choice this step 
-        # (cooldown, or masked out as a self-trap)
+        # BOMB wasn't offered as a choice this step 
         self.episode_bomb_masked_steps += 1
 
 
@@ -442,8 +471,24 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     :param self: The same object that is passed to all of your callbacks.
     """
     self.logger.debug(f'Encountered event(s) {", ".join(map(repr, events))} in final step')
-    
-    
+
+    if e.SURVIVED_ROUND in events:
+        others = last_game_state.get('others', []) if last_game_state else []
+        my_score = last_game_state['self'][1] if last_game_state else 0
+        if not others:
+            events.append('WON_ROUND')
+            events.append('WON_BY_ELIMINATION')
+        elif my_score > max(other[1] for other in others):
+            events.append('WON_ROUND')
+            events.append('WON_BY_SCORE')
+
+    episode_visited_tiles = len(getattr(self.ppo_agent, 'visited_tiles', set()))
+    if last_game_state is not None:
+        total_walkable_tiles = int(np.sum(last_game_state['field'] == 0))
+        map_coverage = episode_visited_tiles / total_walkable_tiles if total_walkable_tiles > 0 else 0.0
+    else:
+        map_coverage = 0.0
+
     # Reset episode
     self.ppo_agent.reset_episode()
     
@@ -524,7 +569,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
         self.logger.info(f"[Episode {len(self.episode_lengths)}] "
                          f"Avg Length (last 10): {avg_len:.1f} steps")
 
-        # Rolling action distribution
+        # Rolling action distribution 
         total_actions = sum(self.action_counts.values())
         if total_actions > 0:
             dist_str = " | ".join(
@@ -534,7 +579,10 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
             self.logger.info(f"[ACTION DIST DEBUG] Last {total_actions} actions (last 10 episodes) -> {dist_str}")
             self.action_counts.clear()
 
-    # Extract parameters from args 
+    # Extract parameters from self 
+    model_type = getattr(self, 'model_type', 'mlp')
+    behavior = getattr(self, 'behavior', 'peaceful')
+    scenario = get_scenario()
     num_opponents = get_num_opponents()
     num_rounds = get_rounds()
     
@@ -554,9 +602,8 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     # Create state tensors 
     state_tensor = getattr(self, 'last_state', None)
     if state_tensor is None: 
-        state_features = state_to_features(last_game_state, self.model_type)
+        state_features = state_to_features(last_game_state, model_type)
         state_tensor   = features_to_tensor(state_features)
-    
 
     # Push terminal state into PPO gameplay buffer
     self.ppo_agent.buffer.store(
@@ -612,6 +659,10 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
             "got_killed": int(e.GOT_KILLED in events), "killed_opponent": int(e.KILLED_OPPONENT in events),
             "opponent_killed": int(e.OPPONENT_ELIMINATED in events), # was opponent_eliminated
             "survived_round": int(e.SURVIVED_ROUND in events), "terminal_action": last_action,
+            "won_round": int('WON_ROUND' in events),
+            "won_by_elimination": int('WON_BY_ELIMINATION' in events),
+            "won_by_score": int('WON_BY_SCORE' in events),
+            "tiles_visited": episode_visited_tiles, "map_coverage": map_coverage,
             "shaped_reward": shaped_reward, "critic_value_pred": v_pred, "value_error": value_error,
             "total_loss": self.ppo_agent.loss_history[-1] if self.ppo_agent.loss_history else None, 
             "critic_loss": self.ppo_agent.critic_loss_history[-1] if self.ppo_agent.critic_loss_history else None, 
@@ -621,13 +672,14 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
             "bomb_legal_not_taken": bomb_legal_not_taken,
             "trapped_self": trapped_self, 
             "trapped_enemy": trapped_enemy
-            
+    
         })
             
+
     episode = len(self.episode_lengths)
     is_final_round = num_rounds > 0 and episode == num_rounds
 
-    # Keep a rolling copy of latest episode
+    # Keep a rolling "latest" copy (no -ep suffix, so run_eval ignores it)
     if episode % SAVE_LATEST_EVERY == 0 or is_final_round:
         save_model(self.model, filepath)
         self.logger.info(f"Saved trained model to {filepath}")
@@ -645,8 +697,9 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
        torch.save(self.model.state_dict(), ckpt_path)
        self.logger.info(f"Saved checkpoint to {ckpt_path}")
        #print(f"Saved checkpoint to {ckpt_path}")
+
         
-        
+    torch.save(self.model.state_dict(), filepath)
     self.logger.info(f"Saved trained model to {filepath}")
 
 def save_model(model, path: str):

@@ -54,3 +54,22 @@ class MLPActorCritic(nn.Module):
         critic_features = self.critic_base(state)
         return self.critic_head(critic_features).squeeze(-1)
         
+
+    def get_action_value(self, state: torch.Tensor, action: torch.Tensor = None) -> torch.Tensor:
+        """Helper function that is used to obtain action-value (Q(s,a)) for rollout and also loss calculation 
+           Returns the action, probability of choosing the action (log_prob), entropy and the state value """
+        
+        logits, value = self(state)
+        dist = Categorical(logits=logits)
+        
+    
+        # If no action, sample action from probabilities
+        if action is None: 
+            action = dist.sample()
+            
+        # Find probability and entropy 
+        log_prob = dist.log_prob(action)
+        entropy = dist.entropy()
+        
+        return action, log_prob, entropy, value.squeeze(-1)
+        

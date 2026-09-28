@@ -1,5 +1,6 @@
 import glob
 import os 
+import sys
 import subprocess
 import time
 
@@ -26,6 +27,7 @@ python bo_search.py --task task1_tournament --n-trials 20
 
 
 BEHAVIOR = "peaceful"
+MODEL_TYPE = "lut"
 N_TRIALS = 20
 EPISODES_PER_UPDATE = 4
 
@@ -46,18 +48,20 @@ TASK_CONFIGS = {
         agents=[], 
         n_rounds=50, 
         search_space={
-            "COIN": (0.02, 0.20),    # POTENTIAL_WEIGHTS - shaping towards revealed coins
+            "COIN": (0.02, 0.20), # POTENTIAL_WEIGHTS - shaping towards revealed coins
             "EXPLORE": (0.001, 0.02) # POTENTIAL_WEIGHTS - exploration bonus 
-        }),
+        }, 
+        warm_start = None),
     
     "task_1": dict(
         scenario="coin-heaven", 
         agents=[],
         n_rounds=150,
         search_space={
-            "COIN": (0.02, 0.20),    
-            "EXPLORE": (0.001, 0.02) 
-        }),
+            "COIN": (0.02, 0.20), # POTENTIAL_WEIGHTS - shaping towards revealed coins
+            "EXPLORE": (0.001, 0.02) # POTENTIAL_WEIGHTS - exploration bonus 
+        }, 
+        warm_start = None),
     
     
     "task_2_smoke": dict(
@@ -65,33 +69,36 @@ TASK_CONFIGS = {
         agents=[],
         n_rounds=50,
         search_space={
-            "BOMB_WASTEFUL": (-0.5, -0.3),  # BASE_REWARDS - shaping away from bomb not destroying crate/endangering opponent
+            "BOMB_WASTEFUL": (-0.5, -0.3),  # BASE_REWARDS - shaping away from bomb not destroying crate/endangering opponent (lut merge: (-0.8, -0.3)
             "BOMB_USEFUL": (0.10, 0.45),    # BASE_REWARDS - shaping towards bomb destroying crate/endangers opponent
-            "MOVED_TO_SAFETY":(0.05, 0.35), # BASE_REWARDS - shaping towards moving to safety if in danger
+            "MOVED_TO_SAFETY":(0.05, 0.35), # BASE_REWARDS - shaping towards moving to safety if in danger (lut: did not exit)
             "CRATE": (0.03, 0.10)           # POTENTIAL_WEIGHTS - shaping towards destroying crates
-        }),
+        },
+        warm_start = None),
         
     "task_2": dict(
         scenario="classic",
         agents=[],
         n_rounds=150,
         search_space={
-            "BOMB_WASTEFUL": (-0.5, -0.3),
+            "BOMB_WASTEFUL": (-0.5, -0.3),  # lut merge alternative: (-0.8, -0.3)
             "BOMB_USEFUL": (0.10, 0.45),
             "MOVED_TO_SAFETY":(0.05, 0.35),
             "CRATE": (0.03, 0.10)
-        }),
+        },
+        warm_start = None),
     
     "task_3_smoke": dict(
         scenario="classic",
         agents=["peaceful_agent", "coin_collector_agent"],
         n_rounds=50, 
         search_space={
-            "BOMB_WASTEFUL": (-0.5, -0.3), 
+            "BOMB_WASTEFUL": (-0.5, -0.3),  # lut merge alternative: (-0.8, -0.3)
             "BOMB_USEFUL": (0.10, 0.45),
             "MOVED_TO_SAFETY":(0.05, 0.35),
             "CRATE": (0.03, 0.10), 
             "TRAP": (0.002, 0.02) # POTENTIAL_WEIGHTS - shaping towards trapping opponents
+            # "KILL": (0.005, 0.05)
         }),
     
             
@@ -105,7 +112,9 @@ TASK_CONFIGS = {
             "MOVED_TO_SAFETY":(0.05, 0.35),
             "CRATE": (0.03, 0.10), 
             "TRAP": (0.002, 0.02)
-        }),
+            #"KILL": (0.005, 0.05), #Potential Weights
+        },
+        warm_start = None),
     
     "task_4_smoke": dict(
         scenario="classic",
@@ -116,7 +125,7 @@ TASK_CONFIGS = {
             "BOMB_USEFUL": (0.10, 0.45),
             "MOVED_TO_SAFETY":(0.05, 0.35),
             "CRATE": (0.03, 0.08), 
-            "SURVIVE": (0.8, 1.0), # POTENTIAL_WEIGHTS - shaping towards surviving 
+            "SURVIVE": (0.8, 1.0), # POTENTIAL_WEIGHTS - shaping towards surviving  (lut (0.8, 1.2))
             "TRAP": (0.002, 0.02)  # POTENTIAL_WEIGHTS - shaping towards trapping an opponent
         }),
     
@@ -131,8 +140,9 @@ TASK_CONFIGS = {
             "CRATE": (0.03, 0.08), 
             "SURVIVE": (0.8, 1.0),
             "TRAP": (0.002, 0.02)
-        }),
-    
+        },
+        warm_start = None),
+            
     "task_4_aggressive_smoke": dict(
         scenario="classic",
         agents=["rule_based_agent"],
@@ -146,18 +156,19 @@ TASK_CONFIGS = {
             "TRAP": (0.1, 0.5), # High bounds for kill and trap   
         }),
     
-    "task_4_aggressive": dict(
+    "task_4_aggressive": dict( # lut it is simply task_4
         scenario="classic",
         agents=["rule_based_agent"],
         n_rounds=150,
         search_space={
             "BOMB_WASTEFUL": (-0.8, -0.3),
             "BOMB_USEFUL": (0.10, 0.45), 
-            "CRATE": (0.05, 0.25), 
-            "SURVIVE":(0.0, 0.3), 
-            "KILL": (0.3, 1.5),
-            "TRAP": (0.1, 0.5), 
-        })
+            "CRATE": (0.05, 0.25),  # lut 0.03, 0.1
+            "SURVIVE":(0.0, 0.3), # lut 0.8, 1.2
+            "KILL": (0.3, 1.5), # was not in lut
+            "TRAP": (0.1, 0.5), # 0.002, 0.02
+        },
+        warm_start = None),
 }
           
 def get_seed_from_env(task_config: dict, behavior: str) -> dict: 
@@ -196,7 +207,9 @@ def build_train_cmd(task_config: dict) -> list[str]:
     Returns:
         The command 
     """
-    cmd = ["python", str(MAIN_PY.resolve()), "play", "--agents" ,"elsenz", *task_config["agents"],
+    # sys.executable, not "python": the trial must run under the same interpreter as this
+    # sweep (a bare "python" may not exist on PATH, e.g. inside a conda env).
+    cmd = [sys.executable, str(MAIN_PY.resolve()), "play", "--agents" ,"elsenz", *task_config["agents"],
            "--train", "1", "--n-rounds", str(task_config["n_rounds"]), 
            "--scenario", task_config["scenario"], "--no-gui"]
     
@@ -243,6 +256,7 @@ def score_episodes(df: "pd.DataFrame", window: int = 15) -> float:
     death_rate = ((tail["killed_self"] == 1) | (tail["got_killed"] == 1)).mean()
     
     # Return score, 
+    # the lut variant: return crates_destroyed + 5.0 * useful_rate - 15.0 * death_rate
     return coins_collected + crates_destroyed + 5.0 * useful_rate - 15.0 * death_rate
     
 def objective(trial: optuna.Trial, task_config: dict) -> float: 
@@ -252,11 +266,25 @@ def objective(trial: optuna.Trial, task_config: dict) -> float:
     for key, (low, high) in task_config["search_space"].items():
         value = trial.suggest_float(key, low, high)
         env[f"ELSENZ_{BEHAVIOR.upper()}_{key}"] = str(value)
-        env[f"ELSENZ_{BEHAVIOR.upper()}_MOVED_FROM_SAFETY"] = str(-value) # Mirror MOVED_TO_SAFETY
-    
-    # Store behavior and updatesfrom arguments
+        env[f"ELSENZ_{BEHAVIOR.upper()}_MOVED_FROM_SAFETY"] = str(-value) # Mirror MOVED_TO_SAFETY # not in originl lut
+        
+    # Store behavior and model types from arguments
     env["ELSENZ_BEHAVIOR"] = BEHAVIOR
+    env["ELSENZ_MODEL_TYPE"] = MODEL_TYPE
     env["ELSENZ_EPISODES_PER_UPDATE"] = str(EPISODES_PER_UPDATE)
+
+        # thread through warm start if one is added to callback.py's setup
+    # lets trial start from prior-stage checkpoint
+        
+    # .get(): the LUT merge added warm_start to most TASK_CONFIGS entries but not to
+    # task_3_smoke/task_4_smoke/task_4_aggressive_smoke, and a missing key just means
+    # "no warm start" rather than a reason to crash the sweep.
+    if task_config.get("warm_start"):
+        env["ELSENZ_WARM_START"] = task_config["warm_start"]
+    
+    # see above Store behavior and updatesfrom arguments
+    # env["ELSENZ_BEHAVIOR"] = BEHAVIOR
+    # env["ELSENZ_EPISODES_PER_UPDATE"] = str(EPISODES_PER_UPDATE)
 
     # Track start of trial and build/run command
     trial_start = time.time()
@@ -308,9 +336,12 @@ if __name__ == "__main__":
     import functools 
     
     parser = argparse.ArgumentParser()
-    parser.add_argument("--task", choices=sorted(TASK_CONFIGS), default="task_4")
+    parser.add_argument("--task", choices=sorted(TASK_CONFIGS), default="task_4") # original lut has task4
     parser.add_argument("--n-trials", type=int, default=N_TRIALS)
     parser.add_argument("--behavior", choices=["peaceful", "aggressive"], default = "peaceful")
+    # elsenz is the LUT-only agent - callbacks.build_model() raises for anything else,
+    # so mlp/cnn are not offered here (they live in the neckar agent).
+    parser.add_argument("--model", choices=["lut"], default="lut")
     parser.add_argument("--episodes-per-update", type=int, default=EPISODES_PER_UPDATE,
                          help="Rollout-accumulation batch size threaded through as "
                               "ELSENZ_EPISODES_PER_UPDATE (default: %(default)s). Explicit "
@@ -318,7 +349,7 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
 
-
+# Keep an eye open if this troughts an error
     # Guard against task/behavior mismatch (if --task task_4_aggressive, shouldn't get --bevhavior peaceful )
     task_is_aggressive = "aggressive" in args.task
     
@@ -334,6 +365,7 @@ if __name__ == "__main__":
     # Get behavior and model type from arguments, these will be passed into 
     # the other agent files 
     BEHAVIOR = args.behavior
+    MODEL_TYPE = args.model
     EPISODES_PER_UPDATE = args.episodes_per_update
     
     task_config = TASK_CONFIGS[args.task]
@@ -344,9 +376,10 @@ if __name__ == "__main__":
     
     print(f" scenario={task_config['scenario']!r},"
           f" behavior={BEHAVIOR!r},"
-          f" model=lut"
+          f" model={MODEL_TYPE!r}"
           f" agents={task_config['agents']}, n_rounds={task_config['n_rounds']}"
-          f" episodes_per_update={EPISODES_PER_UPDATE}")
+          f" warm_start={task_config.get('warm_start')!r},"
+          f" episodes_per_update={EPISODES_PER_UPDATE}\n")
     
     print(f"Search Space: {task_config['search_space']}")
     
@@ -413,6 +446,12 @@ if __name__ == "__main__":
         print(f" score: {study.best_value:.3f}")
         print(f" params: {study.best_params}")
         
+        # Obtain dataframe and output into csv
+        trials_df = study.trials_dataframe()
+        out_csv = f"bo_search_results_{args.task}_{args.behavior}_{args.model}.csv"
+        trials_df.to_csv(out_csv, index=False)
+        print(f"\nFull trial history written to {out_csv}")
+    
         # Print out the top 3 best trials
         top = trials_df.sort_values("value", ascending=False).head(3)
     

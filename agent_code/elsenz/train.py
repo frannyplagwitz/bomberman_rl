@@ -10,15 +10,32 @@ import events as e
 import settings as s
 
 from .agent_behavior import BASE_REWARDS, POTENTIAL_WEIGHTS
-from .rl_heuristics import  TabularQAgent
+from .rl_heuristics import TabularQAgent
 
 
-from .callbacks import state_to_features, features_to_tensor, get_scenario, get_num_opponents, get_rounds, get_curr_epsilon
+from .callbacks import (state_to_features, features_to_tensor, get_scenario, get_num_opponents,
+                        get_rounds, get_curr_epsilon, get_shared_table_path, get_contributions_dir)
 from . import spatial_feature_extractor as spatial
+from . import state_symmetry
+from . import LUT as lut_models
 from .episode_logger import EpisodeCSVLogger, make_run_id
 
 
 ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'BOMB', 'WAIT']
+
+
+def canonical_state(self, game_state: dict):
+    """For the LUT path, rotate game_state the same way act() did this round
+    (self.rotation_k, fixed at step 1 - see callbacks.get_rotation_k) before
+    handing it to state_to_features, so the state index computed here always
+    matches the canonical frame the Q-table was actually queried/updated in.
+    A no-op for game_state=None or the MLP/CNN paths.
+    """
+
+    if self.model_type == "lut" and game_state is not None:
+        return state_symmetry.canonicalize(game_state, getattr(self, "rotation_k", 0))
+
+    return game_state
 
 
 # Note that hyperparameters will depend on the RL heuristic model we use
@@ -39,11 +56,19 @@ def setup_training(self):
     This is called after `setup` in callbacks.py.
 
     :param self: This object is passed to all callbacks and you can set arbitrary values.
+    :model_type: model used for training, default is lookup tables (lut)
     :param behavior: behavior that agent should use (peaceful vs. aggressive), default is peaceful 
     """
+
+    # self.logger.info("Setting up training for ELSENZ agent")
+    # if torch.cuda.is_available():
+    #     self.logger.info("CUDA is available, using GPU for training")
+    #     self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
     # Store model type and behavior 
     self.behavior = getattr(self, "behavior", "peaceful")
     self.episodes_per_update = getattr(self, "episodes_per_update", 4)
+    self.model_type = getattr(self, "model_type", "mlp") 
     
     self.scenario = get_scenario()
     self.num_opponents = get_num_opponents()
@@ -73,7 +98,6 @@ def setup_training(self):
     self.step_logger.setLevel(logging.DEBUG)
     self.step_logger.propagate = False
     
-    
     if not self.step_logger.handlers: # guard against duplicate handlers
         os.makedirs(os.path.join(BASE_DIR, "logs"), exist_ok=True)
         step_handler = logging.FileHandler(os.path.join(BASE_DIR, "logs", f"{self.logger.name}-steps.log"), mode="w")
@@ -81,27 +105,33 @@ def setup_training(self):
         self.step_logger.addHandler(step_handler)
     
 
-    # Initialize CSV run and episode log path 
-    # The name will depend on whether or not we are training
-
-
+    # Entropy values        
+    entropy_start = getattr(self, "entropy_start", 0.05)
+    entropy_end = getattr(self, "entropy_end", 0.01)
+    entropy_decay_updates = getattr(self, "entropy_decay_updates", 150)
 
     
+    # Initialize CSV run and episode log path 
     self.run_id = getattr(self, "run_id", None) or make_run_id()
         
     episode_log_path = os.path.join(
         BASE_DIR, "logs",
-        f"episodes-lut-{self.behavior}-{self.scenario}"
+        f"episodes-{self.model_type}-{self.behavior}-{self.scenario}"
         f"-{self.num_rounds}-rounds-{self.num_opponents}-opponents-{self.run_id}.csv")
-    
     self.episode_logger = EpisodeCSVLogger(episode_log_path)
 
     # Setup models, if LUT, use tabular Q, else use PPO 
-    self.tabq_agent = TabularQAgent(
-        model=self.model, gamma=0.99, alpha=0.1,
-        behavior=self.behavior, potential_weights=POTENTIAL_WEIGHTS.get(self.behavior, {}),
-        base_rewards=BASE_REWARDS.get(self.behavior, {}),
-        logger=self.logger, step_logger=self.step_logger)
+    if self.model_type == "lut":
+        self.tabq_agent = TabularQAgent(
+            model=self.model,
+            gamma=0.99,
+            alpha=0.1,
+            model_type=self.model_type,
+            behavior=self.behavior,
+            potential_weights=POTENTIAL_WEIGHTS.get(self.behavior, {}),
+            base_rewards=BASE_REWARDS.get(self.behavior, {}),
+            logger=self.logger,
+            step_logger=self.step_logger)
 
 
 def detect_custom_events(self, old_game_state: dict, self_action: str, 
@@ -128,7 +158,7 @@ def detect_custom_events(self, old_game_state: dict, self_action: str,
     # Reasoning: Saves computation time, reduces risk of agent doing something dumb
     if self_action: 
         custom_events.append("STEP_PENALTY")
-                   
+        
     # Grab necessary data from old game state
     old_field = old_game_state['field']
     old_pos = old_game_state['self'][3]    
@@ -136,6 +166,7 @@ def detect_custom_events(self, old_game_state: dict, self_action: str,
     old_opponents = [pos for _, _, _, pos in old_game_state['others']] if old_game_state['others'] else []
     old_explosion_map = old_game_state.get('explosion_map', None)
     old_entities = old_opponents + [old_pos]
+    
     
     
     # Grab necessary data from new game state
@@ -150,9 +181,7 @@ def detect_custom_events(self, old_game_state: dict, self_action: str,
     # Add bomb visibility for debug purposes - log every bomb's position, timer and distance to agent
     # for every step
     bomb_info = [
-        {"pos": bpos, "timer": btimer, "dist_to_agent": 
-            abs(bpos[0] - new_pos[0]) + abs(bpos[1] - new_pos[1])}
-        
+        {"pos": bpos, "timer": btimer, "dist_to_agent": abs(bpos[0] - new_pos[0]) + abs(bpos[1] - new_pos[1])}
         for bpos, btimer in (new_bombs or [])
     ]
     self.step_logger.debug(f"[BOMB VISIBILITY DEBUG] Step {new_game_state['step']} |"
@@ -195,7 +224,7 @@ def detect_custom_events(self, old_game_state: dict, self_action: str,
     
     # Look through POV of each opponent in new state
     for name, new_opp_pos in new_opponents_by_name.items(): 
-        
+    
         # Get list of opponent's opponents for spatial
         # extractor calls
         new_op_opponents = {op for op in new_entities if op != new_opp_pos}
@@ -205,7 +234,7 @@ def detect_custom_events(self, old_game_state: dict, self_action: str,
             field= new_field, entity_pos=new_opp_pos,
             bombs=new_bombs, opponents=new_op_opponents, 
             explosion_map=new_explosion_map)
-          
+        
         # Find the old position of the opponent,
         # if doesn't exist, not trapped 
         old_opp_pos = old_opponents_by_name.get(name)
@@ -266,6 +295,7 @@ def game_events_occurred(self, old_game_state: dict, self_action: str,
     :param self_action: The action that you took.
     :param new_game_state: The state the agent is in now.
     :param events: The events that occurred when going from  `old_game_state` to `new_game_state`
+    :param model_type: The type of model used for training, default is lookup tables (lut)
     :param behavior: The behavior that the agent uses, default is peaceful 
     """
 
@@ -356,12 +386,13 @@ def game_events_occurred(self, old_game_state: dict, self_action: str,
     self.num_opponents = get_num_opponents()
     self.num_rounds = get_rounds()
     
-    # Calculate reward
-    shaped_reward = self.tabq_agent.compute_reward(
-        game_state=old_game_state,
-        next_game_state=effective_next_state,
-        events=events,
-        terminal=False)
+    # Calculate reward: differs depending on using Tabular-Q and PPO 
+    if self.model_type == "lut":
+        shaped_reward = self.tabq_agent.compute_reward(
+            game_state=old_game_state,
+            next_game_state=effective_next_state,
+            events=events,
+            terminal=False)
     
     step = effective_next_state['step']
     action = self_action if self_action else "NONE"
@@ -373,13 +404,13 @@ def game_events_occurred(self, old_game_state: dict, self_action: str,
     state_tensor = getattr(self, 'last_state', None)
     
     # Convert old state tensor (if available) to features and then back to a tensor
-    if state_tensor is None: 
-        state_features = state_to_features(old_game_state)
-        state_tensor   = features_to_tensor(state_features)
-        
+    if state_tensor is None:
+        state_features = state_to_features(canonical_state(self, old_game_state), self.model_type)
+        state_tensor   = features_to_tensor(state_features, self.model_type)
+
     # Convert next state to features then to tensors
-    next_state_features = state_to_features(effective_next_state)
-    next_state_tensor   = features_to_tensor(next_state_features)
+    next_state_features = state_to_features(canonical_state(self, effective_next_state), self.model_type)
+    next_state_tensor   = features_to_tensor(next_state_features, self.model_type)
    
     stored_action_idx = getattr(self, 'last_action', 5)
     self.step_logger.debug(
@@ -399,14 +430,15 @@ def game_events_occurred(self, old_game_state: dict, self_action: str,
         
         
     # Store tensor, actions, rewards and current epsilon into buffer for updates 
-    self.tabq_agent.step_update(
-        state_idx=int(state_tensor.item()),
-        action=stored_action_idx,
-        reward=shaped_reward,
-        next_state_idx=int(next_state_tensor.item()),
-        terminal=False,
-        epsilon=get_curr_epsilon(self),
-        next_game_state=effective_next_state)
+    if self.model_type == "lut":
+        self.tabq_agent.step_update(
+            state_idx=int(state_tensor.item()),
+            action=stored_action_idx,
+            reward=shaped_reward,
+            next_state_idx=int(next_state_tensor.item()),
+            terminal=False,
+            epsilon=get_curr_epsilon(self),
+            next_game_state=effective_next_state)
 
     
 def end_of_round(self, last_game_state: dict, last_action: str, events: List[str]):
@@ -426,7 +458,8 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     
     
     # Reset episode
-    self.tabq_agent.reset_episode()
+    if self.model_type == "lut":
+        self.tabq_agent.reset_episode()
 
     # Keep track of terminal actions/ events
     self.action_counts[getattr(self, 'last_action', 5)] += 1
@@ -516,43 +549,47 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
             self.logger.info(f"[ACTION DIST DEBUG] Last {total_actions} actions (last 10 episodes) -> {dist_str}")
             self.action_counts.clear()
 
-    # Extract parameters from args 
+    # Extract parameters from self 
+    model_type = getattr(self, 'model_type', 'mlp')
+    behavior = getattr(self, 'behavior', 'peaceful')
+    scenario = get_scenario()
     num_opponents = get_num_opponents()
     num_rounds = get_rounds()
     
     # Grab file path to save checkpoint
     filepath = os.path.join(BASE_DIR,
-        f"actor-critic-lut-{self.behavior}-{self.scenario}"
-        f"-{num_rounds}-rounds-{num_opponents}-opponents.pt")
+               f"actor-critic-{model_type}-{behavior}-{scenario}"
+               f"-{num_rounds}-rounds-{num_opponents}-opponents.pt")
     
     # Calculate shaped reward for terminal state
-    shaped_reward = self.tabq_agent.compute_reward(
-        game_state=last_game_state,
-        next_game_state=None,
-        events=events,
-        terminal=True)
+    if self.model_type == "lut":
+        shaped_reward = self.tabq_agent.compute_reward(
+            game_state=last_game_state,
+            next_game_state=None,
+            events=events,
+            terminal=True)
     
     # Create state tensors 
     state_tensor = getattr(self, 'last_state', None)
-    if state_tensor is None: 
-        state_features = state_to_features(last_game_state)
-        state_tensor   = features_to_tensor(state_features)
+    if state_tensor is None:
+        state_features = state_to_features(canonical_state(self, last_game_state), model_type)
+        state_tensor   = features_to_tensor(state_features, model_type)
     
     # Perform update if LUT 
-    self.tabq_agent.step_update(
-        state_idx=int(state_tensor.item()),
-        action=getattr(self, 'last_action', 5),
-        reward=shaped_reward,
-        next_state_idx=None,
-        terminal=True,
-        epsilon=get_curr_epsilon(self),
-        next_game_state=None)
+    if model_type == "lut":
+        self.tabq_agent.step_update(
+            state_idx=int(state_tensor.item()),
+            action=getattr(self, 'last_action', 5),
+            reward=shaped_reward,
+            next_state_idx=None,
+            terminal=True,
+            epsilon=get_curr_epsilon(self),
+            next_game_state=None)
 
     # Obtain value prediction and error 
     v_pred = None
     value_error = None
         
-    # Obtain eval state for each 
     with torch.no_grad():
         eval_state = state_tensor.view(1) if state_tensor.dim() == 0 else state_tensor 
 
@@ -569,8 +606,8 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
         
         # Run per-episode metrics 
         self.episode_logger.log_episode({
-            "run_id": self.run_id, "model_type": "lut",
-            "behavior": self.behavior, "scenario": self.scenario,
+            "run_id": self.run_id, "model_type": model_type,
+            "behavior": behavior, "scenario": scenario,
             "num_rounds": num_rounds, "opponents": num_opponents,                             
             "episodes": len(self.episode_lengths),                  
             "steps": final_steps, "bombs_dropped": bombs_dropped,
@@ -600,13 +637,12 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
         #mr_filepath      = "mean_reward_" + common_filepath 
         #entropy_filepath = "entropy_" + common_filepath
         #episode_filepath = "episode_steps_" + common_filepath
-        
-    
-        # Create title names for the metrics 
-        
-        #common_title = (f" - Model: {"LUT"}, Behavior: {self.behavior}, Scenario: {self.scenario}")
-        #model_name = "Tabular Q Learning"
-        
+
+
+            # Create title names for the metrics
+
+            #common_title = (f" - Model: {model_type}, Behavior: {behavior}, Scenario: {scenario}")
+
         #loss_title    = model_name + " Total MSE Loss" + common_title
         #critic_title  = model_name + " Critic MSE Loss" + common_title 
         #mr_title      = model_name + " Mean Reward" + common_title
@@ -614,11 +650,11 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
         #episode_title = model_name + " Episode Steps" + common_title 
 
         #plot_metric(self.tabq_agent.loss_history, loss_filepath, "Training Loss", loss_title)
-        
+
         #if hasattr(self.tabq_agent, "critic_loss_history"):
          #   plot_metric(self.tabq_agent.critic_loss_history, critic_filepath, 
           #              "Critic Loss", critic_title)
-        
+
         #plot_metric(self.tabq_agent.mean_reward_history, mr_filepath, "Mean Reward", mr_title)
         #plot_metric(self.tabq_agent.entropy_history, entropy_filepath, "Entropy", entropy_title)
         #plot_metric(self.episode_lengths, episode_filepath, "Episode Steps", episode_title)
@@ -629,10 +665,23 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
        torch.save(self.model.state_dict(), ckpt_path)
        self.logger.info(f"Saved checkpoint to {ckpt_path}")
        #print(f"Saved checkpoint to {ckpt_path}")
-        
-        
+
+
+    torch.save(self.model.state_dict(), filepath)
     self.logger.info(f"Saved trained model to {filepath}")
    
+    if model_type == "lut":
+        # This is the only disk write this process's LUT training does beyond the
+        # one warm-start read in callbacks.build_model() It's this process's local table alone;
+        # nothing here touches the canonical table or any other process's
+        # contribution file, so no locking is needed even with many parallel workers
+        # all doing this at once. Combining every contribution into the canonical
+        # table is a separate step (models.LUT.merge_tables), run once by
+        # train_lut_parallel.sh after every worker has exited.
+        contribution_path = lut_models.save_contribution(
+            self.model, get_contributions_dir(self), worker_id=f"{self.run_id}-{os.getpid()}")
+        self.logger.info(f"Saved end-of-run contribution to {contribution_path}")
+
 
 def plot_metric(history: list, filename: str, ylabel: str, title: str, color: str = "blue", window: int = 10):
     
@@ -663,7 +712,7 @@ def plot_metric(history: list, filename: str, ylabel: str, title: str, color: st
         
         plt.plot(x_range, moving_avg, label=f"{window}-step Moving average", color='orange')
         
-    plt.xlabel('PPO Updates')
+    plt.xlabel('Episodes')
     plt.ylabel(ylabel)
     plt.title(title)  
     plt.grid(True)

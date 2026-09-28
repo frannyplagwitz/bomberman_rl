@@ -5,6 +5,7 @@ finds the averages of several metrics, and outputs those values into a compariso
 import glob
 import json
 import os
+import sys
 import re
 import shutil
 import subprocess
@@ -20,14 +21,34 @@ MAIN_PY = Path(__file__).resolve().parent / "../../main.py"
 # Match whatever model/behavior this agent is currently configured for
 MODEL_TYPE = os.environ.get("NECKAR_MODEL_TYPE", "cnn")
 BEHAVIOR = os.environ.get("NECKAR_BEHAVIOR", "peaceful")
-SCENARIO = os.environ.get("NECKAR_SCENARIO", "coin_heaven")
+SCENARIO = os.environ.get("NECKAR_SCENARIO", "coin-heaven")
 
 CKPT_PATTERN = f"actor-critic-{MODEL_TYPE}-{BEHAVIOR}-{SCENARIO}-*-rounds-*-opponents-ep*.pt"
-EVAL_FILENAME = f"neckar-{MODEL_TYPE}-{BEHAVIOR}-{SCENARIO}.pt"
 AGENT_NAME = "neckar"
 EVAL_POLICIES = ["greedy", "sample"]
- 
+
+# Defined once so the opponent count below can't drift out of sync with the staged
+# checkpoint's filename. 3 opponents + this agent = settings.MAX_AGENTS (4).
+EVAL_OPPONENTS = ["random_agent"] * 3
+
 N_ROUNDS = 200 # Originally 100, but switched to 200 because added greedy/stochastic sampling comparison
+
+
+def eval_scenario(task: str) -> str:
+    """Scenario the eval command actually passes to main.py for this task."""
+    return "coin-heaven" if task == "task1" else "classic"
+
+def eval_filename_for(task: str) -> str:
+    """Name the staged checkpoint must have for callbacks.setup() to load it.
+
+    setup() only ever looks up
+    "actor-critic-<model>-<behavior>-<scenario>-<n>-rounds-<m>-opponents.pt", derived from
+    the arguments the eval run is launched with. Staging under any other name (the old
+    "neckar-<model>-<behavior>-<scenario>.pt") loads nothing, so every checkpoint would be
+    scored as a freshly-initialized network - now a loud FileNotFoundError instead.
+    """
+    return (f"actor-critic-{MODEL_TYPE}-{BEHAVIOR}-{eval_scenario(task)}"
+            f"-{N_ROUNDS}-rounds-{len(EVAL_OPPONENTS)}-opponents.pt")
  
  
 def build_eval_cmd(stats_path: str, task: str):
@@ -36,23 +57,14 @@ def build_eval_cmd(stats_path: str, task: str):
     stats_path: path that stats are saved in 
     task: task that is being run, will define scenario to test
     """
-    if task == "task1":
-        return [
-        "python", str(MAIN_PY.resolve()), "play",
-        "--agents", AGENT_NAME, "random_agent", "random_agent", "random_agent",
-        "--scenario", "coin-heaven",
+
+    return [
+        sys.executable, str(MAIN_PY.resolve()), "play",
+        "--agents", AGENT_NAME, *EVAL_OPPONENTS,
+        "--scenario", eval_scenario(task),
         "--n-rounds", str(N_ROUNDS), "--no-gui",
         "--save-stats", stats_path,
-        ]
-        
-    else: 
-        return [
-        "python", str(MAIN_PY.resolve()), "play",
-        "--agents", AGENT_NAME, "random_agent", "random_agent", "random_agent",
-        "--scenario", "classic",
-        "--n-rounds", str(N_ROUNDS), "--no-gui",
-        "--save-stats", stats_path,
-        ]
+    ]
 
  
 def find_checkpoints(run_dir: str, pattern=CKPT_PATTERN):
@@ -96,17 +108,17 @@ def summarize_checkpoint(stats_path: str, label: str, agent_name: str = AGENT_NA
         row[f"{key}_mean"] = round(agent_stats.get(key, 0) / n_rounds, 3)
  
     own_suicides = agent_stats.get("suicides", 0)
-    own_kills = agent_stats.get("kills", 0)  # times THIS agent killed an opponent
+    own_kills = agent_stats.get("kills", 0)  # times agent killed an opponent
     row["suicide_rate_%"] = round(100.0 * own_suicides / n_rounds, 1)
     row["killed_opponent_rate_%"] = round(100.0 * own_kills / n_rounds, 1)
  
-    # Times killed BY an opponent: inferred from the opponent's own "kills" tally
+    # Times killed by an opponent
     opponent_kills_on_us = sum(
         stats.get("kills", 0) for name, stats in by_agent.items() if name != agent_name
     )
     row["got_killed_rate_%"] = round(100.0 * opponent_kills_on_us / n_rounds, 1)
  
-    # Estimated survival =  rounds not ended by our own suicide or being killed.
+    # Estimated survival = rounds not ended by our own suicide or being killed.
     # Inferred from two ways agent can die
     survived = max(0, n_rounds - own_suicides - opponent_kills_on_us)
     row["survived_round_rate_%"] = round(100.0 * survived / n_rounds, 1)
@@ -136,7 +148,7 @@ def main():
     stats_dir = os.path.join(run_dir, "eval_stats")
     out_dir = os.path.join(run_dir, "eval_results")
     out_path = args.out or os.path.join(run_dir, "checkpoint_comparison.csv")
-    eval_filename = os.path.join(run_dir, EVAL_FILENAME)
+    eval_filename = os.path.join(run_dir, eval_filename_for(task))
  
     os.makedirs(stats_dir, exist_ok=True)
     os.makedirs(out_dir, exist_ok=True)
@@ -149,7 +161,6 @@ def main():
     print(f"[{run_dir}] Found {len(checkpoints)} checkpoints: "
           f"{[get_checkpoint_label(c) for c in checkpoints]}")
  
-    # Tell the agent which run's checkpoint to load/stage — see module docstring.
     subprocess_env = os.environ.copy()
     subprocess_env["NECKAR_RUN_DIR"] = run_dir
  

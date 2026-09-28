@@ -18,7 +18,6 @@ ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'BOMB', 'WAIT']
 
 # For parallel runs, keep track of the base directory 
 BASE_DIR = os.environ.get("NECKAR_RUN_DIR", ".")
-WARM_START = os.environ.get("NECKAR_WARM_START")
 
 def setup(self):
     """
@@ -38,13 +37,13 @@ def setup(self):
     """
 
     self.num_actions = len(ACTIONS)
-    self.model_type = os.environ.get('NECKAR_MODEL_TYPE', getattr(self, 'model_type', 'mlp')) # Default to MLP table if not specified
+    self.model_type = os.environ.get('NECKAR_MODEL_TYPE', getattr(self, 'model_type', 'cnn')) # Default to CNN table if not specified
     self.behavior = os.environ.get('NECKAR_BEHAVIOR', getattr(self, 'behavior', 'peaceful')) # Default to peaceful behavior if not specified
     self.episodes_per_update = int(os.environ.get('NECKAR_EPISODES_PER_UPDATE', '4')) # Episodes to store before update, defaults to 4
     
     # When not training, will test greedy (deterministic) action selection as well as sampling from the policy
-    self.eval_policy = os.environ.get("NECKAR_EVAL_POLICY", "greedy").strip().lower()
-        
+    self.eval_policy = os.environ.get("NECKAR_EVAL_POLICY", "sample").strip().lower()
+    
     
     self.last_log_prob = torch.tensor(0.0) # iniitalize last log prob to 0.0
     self.last_mask = torch.ones(self.num_actions, dtype=torch.bool) # initialize last action mask 
@@ -60,21 +59,30 @@ def setup(self):
         
     
     # Instantiate the network architecture and optimizer
-    self.device = torch.device("cpu") # Only going to do stuff with CPU 
+    # self.device = torch.device("cpu") # Only going to do stuff with CPU, Can discuss if we want to train using GPU though 
+    self.device = 'cpu'
+    # if torch.cuda.is_available():
+    #     self.logger.info("CUDA is available, using GPU for training")
+    #     self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
+
+
     self.model = build_model(self)
     self.model.to(self.device)
-    
-    # In order to save time training after adding new features, added warm_start potential 
-    # Warm start the CNN from a checkpoint trained before the 8 spatial scalars were added
-    if WARM_START and getattr(self, 'train', False) and self.model_type == "cnn":
-        warm_start_from_old_cnn(self.model, WARM_START)
 
     # Choose file to read in from depending on the model and behavior
     #Ex. if using defaults, the file will be "actor-critic-mlp-peaceful.pt"
-        
+    # Joined with BASE_DIR (NECKAR_RUN_DIR) to mirror train.py, which SAVES the checkpoint
+    # under BASE_DIR. Loading from a bare relative path instead meant a run trained with
+    # NECKAR_RUN_DIR set wrote its checkpoint into that directory but could never load it
+    # back, and run_eval.py's staged checkpoint was never picked up either.
+    file_name = os.path.join(
+        BASE_DIR,
+        f"actor-critic-{self.model_type}-{self.behavior}-{self.scenario}"
+        f"-{self.num_rounds}-rounds-{self.num_opponents}-opponents.pt")
     
-    file_name = os.path.join(BASE_DIR, f"neckar-{self.model_type}-{self.behavior}-{self.scenario}.pt")
+    # Override to let training run pick up weights from another warmup checkpoint
+    warm_start = getattr(self, 'warm_start', None) or os.environ.get('NECKAR_WARM_START')
 
     # Let training run pick up weights from a checkpoint saved
     if os.path.isfile(file_name) and not getattr(self, 'train', False):
@@ -82,13 +90,42 @@ def setup(self):
         self.model.load_state_dict(torch.load(file_name, map_location=self.device))
         self.model.eval()    # Set to evalution mode 
 
-    else: 
+    elif getattr(self, 'train', False) and warm_start: 
+        if os.path.isfile(warm_start): 
+            self.logger.info(f"Warm-start training from checkpoint {warm_start}")
+
+            # Exactly one load per run, dispatched on model type. This used to be two: a
+            # standalone warm_start_from_old_cnn() call before the file_name block, then an
+            # unconditional strict load_state_dict() here on the same file - which
+            # overwrote the helper's result and raised, so CNN warm start always crashed.
+            #
+            # CNN goes through the helper: it renames the old Sequential-indexed keys
+            # (actor_base.0 -> actor_conv.0, actor_base.7 -> actor_fc.0) and zero-pads the
+            # FC weight for the 8 spatial scalars added later, then asserts every parameter
+            # was covered. MLP checkpoints match the current architecture as-is.
+            if self.model_type == "cnn":
+                warm_start_from_old_cnn(self.model, warm_start)
+            else:
+                self.model.load_state_dict(torch.load(warm_start, map_location=self.device))
+    
+        else: 
+            self.logger.warning(f"warm_start={warm_start} was set but file doesn't exist."
+                                f"using freshly-initialized model instead")
+        
+        self.model.train()
+    
+    # Training with no warm start: fresh weights
+    elif getattr(self, 'train', False):
         self.logger.info("Setting up model from scratch")
-        if getattr(self, 'train', False):
-            self.model.train()
-            
-        else:
-            self.model.eval()
+        self.model.train()
+
+    # Not training and no model file. Kept from main rather than falling through to a
+    # freshly-initialized model in eval mode: playing an untrained net looks like a
+    # working run and silently produces garbage results, so fail loudly instead.
+    else:
+        raise FileNotFoundError(
+            f"[NECKAR] No trained model found at {os.path.abspath(file_name)}. "
+            f"Copy the selected checkpoint there before playing.")
             
 def build_model(self):
         
@@ -98,11 +135,11 @@ def build_model(self):
             
         Note: Something we can try is adjusting the learning rates for our models    
         """
-             
+            
     if self.model_type == "mlp":
 
         #  num states = 17 x 17 x 6 + 3 spatial features + 5-feature one-hot escape vector = 1742
-        model = MLPActorCritic(num_states=1742, action_dim=self.num_actions)
+        model = MLPActorCritic(input_dim=1742, action_dim=self.num_actions)
      
     elif self.model_type == "cnn":
         # 6x17x17 grid through the convolutions + 8 spatial scalars before the FC layer
@@ -127,6 +164,10 @@ def action_mask(game_state: dict) -> np.ndarray:
 
     if game_state is None:
         return mask
+
+    # one step safety margin that is used to make sure that a tile is actually safe
+    # Action only counts as escapable if there's a full step after taking it 
+    SAFETY_MARGIN = 1
 
     field = game_state["field"]
     bombs = game_state["bombs"]
@@ -238,11 +279,13 @@ def act(self, game_state: dict) -> str:
 
     # Extract features and make sure that we have the correct tensor type and device
     state_features = state_to_features(game_state, self.model_type)
- 
-    # Convert numpy/list to float32
+
+
+    # Convert numpy/list to float32. No LUT branch here: neckar is the MLP/CNN agent -
+    # state_to_features() and build_model() both raise on any other model_type, so a
+    # "lut" path would be unreachable (the table agent is elsenz).
     if not isinstance(state_features, torch.Tensor):
         state_features = torch.tensor(state_features, dtype=torch.float32)
-        
     state_tensor = features_to_tensor(state_features).unsqueeze(0).to(self.device)
             
              
@@ -286,15 +329,14 @@ def act(self, game_state: dict) -> str:
         if self.eval_policy == "sample":
             action_idx = Categorical(logits=masked_logits).sample()
         else:
+        # Greedily select action 
             action_idx = torch.argmax(masked_logits, dim=-1)
         
-    
     return ACTIONS[action_idx.item()]
     
     
 # Functions to retrieve values from arguments
 def get_scenario() -> str: 
-    
     """Get current scenario based on arg passed to main.
     Returns: scenario sent, defaults to classic
     """
@@ -344,6 +386,18 @@ def get_rounds() -> int:
         
     return 0 
 
+def get_curr_epsilon(self, eps_start: float = 1.0, eps_end: float = 0.05, 
+                     eps_decay_episodes: int = 300) -> float:
+    """Linearly decay epsilon for epsilon-greedy exploration"""
+    
+    if not getattr(self, 'train', False):
+        return 0.0
+    
+    episode = len(getattr(self, 'episode_lengths', []))
+    progress = min(1.0, episode / max(1, eps_decay_episodes))
+    return eps_start + (eps_end - eps_start) * progress 
+    
+        
 def state_to_features(game_state: dict, model_type: str) -> torch.Tensor:
     """Extract features from game state based on agent's model type 
         :param game_state: A dictionary describing the current game board 
@@ -353,7 +407,7 @@ def state_to_features(game_state: dict, model_type: str) -> torch.Tensor:
     
     if game_state is None: 
         return torch.zeros(1742) # Return full map of zeros
-
+    
     if model_type in ("mlp", "cnn"):
         # Grid (flattened) + 8 spatial scalars -> (1742,); the CNN reshapes the grid itself
         features = extract_features_1D(game_state)
@@ -362,7 +416,7 @@ def state_to_features(game_state: dict, model_type: str) -> torch.Tensor:
     else: 
         raise ValueError(f"Unknown model_type: {model_type}")
     
-    
+
 def features_to_tensor(features): 
     """Return feature vectors"""
 
@@ -478,7 +532,20 @@ def extract_features_3D (game_state: dict) -> np.ndarray:
         danger_tiles = spatial.get_danger_tiles(field, (bx, by))
         
         # Take the maximum imminence score if a tile is covered by multiple bombs 
-        for tx, ty in danger_tiles: 
+        for tx, ty in danger_tiles:
             tensor[5, tx, ty] = max(tensor[5, tx, ty], imminence)
-    
+
+    # MLPActorCritic's input layer is a fixed num_states=1742 (17x17x6 + 8), so a smaller
+    # field (NECKAR_SHRINK_MAP, settings.py) still has to produce a 17x17x6 tensor here or
+    # every downstream Linear layer shape-mismatches. Pad into a fixed 17x17 canvas, real
+    # field content in the top-left corner (matching how (x,y) coordinates already index
+    # into `tensor` unchanged above), padding marked as wall (channel 0) - functionally
+    # correct, since the agent genuinely cannot go there either way. No-ops when the field
+    # is already 17x17 (every existing run, unaffected).
+    if tensor.shape[1:] != (17, 17):
+        padded = np.zeros((6, 17, 17), dtype=np.float32)
+        padded[0] = 1.0
+        padded[:, :tensor.shape[1], :tensor.shape[2]] = tensor
+        tensor = padded
+
     return tensor     

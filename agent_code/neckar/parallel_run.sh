@@ -3,21 +3,22 @@
 # only the small per-run results (checkpoint + episode CSV) are kept afterward.
 
  
-RUN="train"           # "train" or "test"
+RUN="test"           # "train" or "test"
 N_RUNS=3
 TASK_ROUNDS=2000
 SCENARIO="classic"
-AGENTS="rule_based_agent"
+AGENTS="classic"
 BEHAVIOR="peaceful"
 MODEL="cnn"
-TASK_LABEL="task4"   # change per task — names the results folder; test mode reuses whatever run_1..run_N a prior "train" pass under this same TASK_LABEL already produced
+TASK_LABEL="task3"   # change per task — names the results folder 
 
 
 export NECKAR_BEHAVIOR=$BEHAVIOR
 export NECKAR_MODEL_TYPE=$MODEL
 export NECKAR_EPISODES_PER_UPDATE=4
 export NECKAR_SCENARIO=$SCENARIO
-#export NECKAR_WARM_START="$(pwd)\results\task2\run_1\actor-critic-cnn-peaceful-classic-2000-rounds-0-opponents-ep2000.pt"
+export NECKAR_WARM_START="$(pwd)\results\task1\run_1\actor-critic-cnn-peaceful-coin-heaven-2000-rounds-0-opponents-ep2000.pt"
+
 CORES=$(python -c "import os; print(os.cpu_count())")
 THREADS_PER_RUN=$(( CORES / N_RUNS ))
 [ "$THREADS_PER_RUN" -lt 1 ] && THREADS_PER_RUN=1

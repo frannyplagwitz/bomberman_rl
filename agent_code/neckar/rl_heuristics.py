@@ -248,7 +248,7 @@ def compute_potential(game_state: dict, potential_weights: dict, visited_tiles: 
                 targets=[opponent], bomb_positions=bomb_positions, 
                 opponents = op_opponents, explosion_map=explosion_map)
             
-            d_opponent = res[0] if (res is not None and res[0] != float('inf')) else None
+            d_opponent = res[0] if (res is not None and res[0] != float('inf')) else None # TODO what is difference of res[0] to res[1]
             
 
             if d_opponent is not None: 
