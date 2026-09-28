@@ -1,13 +1,9 @@
-"""Actor-Critic MLP: 2 hidden layers x 64 units, shared trunk, two output
-heads (policy logits, value). Feature-extraction code upstream feeds this;
-the action mask is applied to the logits before sampling/argmax.
-"""
+"""Actor-critic MLP with a shared trunk and separate policy/value heads."""
 import torch
 import torch.nn as nn
 
-# Large finite negative value instead of -inf: masked_fill(..., -inf) can produce
-# NaN gradients through softmax/log_prob in edge cases; a large finite value is
-# numerically equivalent (probability ~0 after softmax) without that risk.
+# Finite instead of -inf: -inf can produce NaN gradients through
+# softmax/log_prob, while a large finite value is numerically equivalent.
 MASK_NEG_VALUE = -1e8
 
 

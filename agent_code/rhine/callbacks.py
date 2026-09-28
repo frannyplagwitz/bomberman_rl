@@ -1,11 +1,9 @@
-"""setup() + act(): extractor -> adapter -> model -> mask -> action.
+"""Agent entry points: setup() and act() (features -> model -> mask -> action).
 
-Checkpoint selection (main.py has no CLI way to pass per-agent args): if
-PPO_AGENT_INIT_CHECKPOINT is set, load it regardless of train mode (Stage C
-warm start uses this). Otherwise: training -> fresh random init (Stage A);
-not training -> try cfg.DEPLOYMENT_CHECKPOINT, else fall back to a fresh
-random model with a warning (so `python main.py play --agents rhine` works
-even before any training has happened).
+Checkpoint selection: PPO_AGENT_INIT_CHECKPOINT, if set, is loaded in any
+mode. Otherwise training starts from a fresh random init, and inference loads
+cfg.DEPLOYMENT_CHECKPOINT, falling back to a random model with a warning if
+it is missing.
 """
 import os
 from collections import deque
@@ -22,11 +20,9 @@ from .state_processing import classify_invalid_action, extract_semantic_state, i
 
 
 def _load_checkpoint_or_raise(path: Path, expected_n_features: int) -> dict:
-    """Loads a checkpoint and fails with an explicit message when its input-layer
-    dimension doesn't match the currently configured feature vector size (most
-    likely cause: cfg.ENABLE_STALL_HISTORY_FEATURE flipped since training).
-    Strict state_dict loading would otherwise raise a bare tensor-shape diff.
-    No partial warm-start across a feature-dimension change is implemented.
+    """Loads a checkpoint, raising a descriptive error if its input dimension
+    differs from the current feature configuration (e.g.
+    cfg.ENABLE_STALL_HISTORY_FEATURE was flipped since training).
     """
     checkpoint = torch.load(path, map_location="cpu")
     saved_n_features = checkpoint["model_state_dict"]["trunk.0.weight"].shape[1]
@@ -44,9 +40,7 @@ def _load_checkpoint_or_raise(path: Path, expected_n_features: int) -> dict:
 
 
 def setup(self):
-    # Lets `python main.py play` enable config.ENABLE_OSCILLATION_BREAKER
-    # without touching main.py; only flips it on for this process, the
-    # config default is untouched.
+    # Lets `python main.py play` enable the breaker for this process only.
     if os.environ.get("PPO_AGENT_ENABLE_OSCILLATION_BREAKER"):
         cfg.ENABLE_OSCILLATION_BREAKER = True
 
@@ -62,31 +56,25 @@ def setup(self):
         n_actions=cfg.MODEL_CONFIG.n_actions,
         hidden_sizes=cfg.MODEL_CONFIG.hidden_sizes,
     )
-    # Populated unconditionally (train and eval) so the optional
-    # stall-history feature works identically at inference time. Independent
-    # of train.py's own recent_positions_v2 (reward-side, training-only).
+    # Maintained in both train and eval so the optional stall-history feature
+    # behaves identically at inference time.
     self.recent_positions_for_feature = deque(maxlen=4)
-    # Separate from recent_positions_for_feature so the oscillation breaker
-    # stays independently toggleable via config.ENABLE_OSCILLATION_BREAKER.
-    # Only populated in act() when not self.train (see below). maxlen matches
-    # apply_oscillation_breaker()'s window_size=7.
+    # Kept separate from recent_positions_for_feature so the breaker can be
+    # toggled independently; maxlen matches the breaker's window size.
     self.recent_positions_for_breaker = deque(maxlen=7)
-    # Consecutive-intervention counter carried across act() calls; see
-    # apply_oscillation_breaker()'s docstring for the cap it's checked against.
+    # Consecutive-intervention counter; see apply_oscillation_breaker().
     self.oscillation_breaker_intervention_streak = 0
 
-    # Tracks own-cause vs contested-tile invalid actions (see
-    # classify_invalid_action()) by comparing consecutive act() calls'
-    # game_state. setup() runs once per Agent lifetime, not per round, so
-    # these are reset on step==1 inside act() itself instead.
+    # Per-round invalid-action counters (see classify_invalid_action()),
+    # computed from consecutive game states. setup() runs once per agent, not
+    # per round, so act() resets them on step 1.
     self.invalid_action_own_cause_count = 0
     self.invalid_action_contested_tile_count = 0
     self._prev_game_state_for_invalid_check = None
     self._prev_action_for_invalid_check = None
 
-    # Set by act() on every call (train and eval alike) so external callers
-    # (e.g. an evaluation script's per-step recording) can read whether this
-    # step's action was overridden by config.ENABLE_DEADLOCK_BOMB.
+    # Exposed so evaluation scripts can record whether this step's action was
+    # overridden by the deadlock-bomb rule.
     self.last_deadlock_bomb_triggered = False
 
     self._loaded_checkpoint = None
@@ -140,9 +128,7 @@ def act(self, game_state: dict) -> str:
     features = features_from_semantic(semantic, stall_history=stall_history)
     mask = mask_from_semantic(semantic)
 
-    # `not self.train` guarantees this never reaches a training rollout even
-    # if the flag were left on by mistake: train.py computes its own mask
-    # directly and never calls apply_oscillation_breaker().
+    # Evaluation-only; train.py builds its own mask and never calls the breaker.
     self.last_deadlock_bomb_triggered = False
     if cfg.ENABLE_OSCILLATION_BREAKER and not self.train:
         self.recent_positions_for_breaker.append(semantic.self_pos)

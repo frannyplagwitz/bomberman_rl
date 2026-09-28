@@ -1,13 +1,11 @@
-"""6-action mask.
+"""6-action legality mask.
 
 Movement: blocked tiles (wall/crate/bomb) are illegal; open tiles are legal
-unless moving there would strand the agent with no safe escape before a
-known bomb/explosion reaches it.
-BOMB: illegal if unavailable; otherwise legal only if a safe escape route
-exists from the current position before this bomb's own blast (checked
-against currently-known bombs/explosions, not bombs placed later).
-WAIT: illegal if staying at the current tile guarantees a hit and at least
-one other action is legal. Kept as a fallback when no action would survive.
+unless moving there leaves no safe escape from known bombs/explosions.
+BOMB: legal only if available and a safe escape from its own blast exists,
+given currently known bombs/explosions.
+WAIT: illegal if staying is guaranteed lethal and another action is legal;
+kept as a fallback when nothing else is legal.
 """
 import numpy as np
 
@@ -28,9 +26,8 @@ from .state_processing import (
 
 
 def _board_fully_cleared(semantic: SemanticState) -> bool:
-    """Trigger check for config.ENABLE_NO_BOMB_WHEN_BOARD_CLEARED: no crates,
-    no surviving opponents, and no collectable coins remain anywhere on the
-    board (not just out of reach).
+    """Trigger for config.ENABLE_NO_BOMB_WHEN_BOARD_CLEARED: no crates,
+    surviving opponents or collectable coins remain anywhere on the board.
     """
     return (
         not np.any(semantic.field_arr == 1)
@@ -46,20 +43,16 @@ def mask_from_semantic(semantic: SemanticState) -> np.ndarray:
     for d in DIRECTIONS:
         if not semantic.can_move[d]:
             continue
-        # Moving happens as part of resolving this action, so safety is
-        # checked at offset 0, not one step later.
+        # The move resolves within this action, so safety starts at offset 0.
         neighbor = neighbor_tile(semantic.self_pos, d)
         neighbor_by_direction[d] = neighbor
         mask[cfg.ACTIONS.index(d)] = exists_safe_path(
             neighbor, 0, semantic.field_arr, semantic.blocked, semantic.danger_offsets, SAFETY_HORIZON
         )
 
-    # If self_pos is within an active bomb's blast reach, re-check each
-    # already-legal direction for >=N+1 independent, conflict-disjoint
-    # escape routes (see _has_sufficient_escape_directions()), N being the
-    # number of opponents whose current BFS distance would let them reach
-    # some tile on a candidate path in time. A direction failing this
-    # stricter check is masked out only if another legal direction passes.
+    # When standing in a blast zone with opponents around, keep only the
+    # directions that retain enough independent escape routes given nearby
+    # opponents (_has_sufficient_escape_directions()), unless none do.
     redundancy_trigger = semantic.current_tile_in_danger and bool(semantic.opponents)
     if redundancy_trigger:
         robust_by_direction = {
@@ -75,13 +68,9 @@ def mask_from_semantic(semantic: SemanticState) -> np.ndarray:
                 if not is_robust:
                     mask[cfg.ACTIONS.index(d)] = False
 
-    # Tie-break among remaining legal movement directions: prefer whichever
-    # landing tile no opponent could also reach next step (real
-    # current-position BFS distance <=1) -- guards against a same-tick
-    # collision race turning an already-chosen legal move into
-    # INVALID_ACTION. Only filters when a genuinely uncontested alternative
-    # exists and there's an actual choice to make (>=2 legal directions) --
-    # a preference among already-legal options, not a legality change.
+    # Among remaining legal directions, prefer landing tiles no opponent can
+    # reach next step, avoiding a same-tick collision that turns the move into
+    # INVALID_ACTION. Only applies when an uncontested alternative exists.
     if semantic.current_tile_in_danger and semantic.opponents:
         currently_legal_dirs = [d for d in neighbor_by_direction if mask[cfg.ACTIONS.index(d)]]
         if len(currently_legal_dirs) > 1:
@@ -106,10 +95,8 @@ def mask_from_semantic(semantic: SemanticState) -> np.ndarray:
     if cfg.ENABLE_NO_BOMB_WHEN_BOARD_CLEARED and _board_fully_cleared(semantic):
         mask[cfg.ACTIONS.index("BOMB")] = False
 
-    # WAIT means staying at self_pos through the next tick (offset 1), not
-    # landing on a new tile the way movement/BOMB do. The offset-0 danger
-    # check is kept explicit because exists_safe_path(self_pos, 1, ...) alone
-    # would skip verifying that the current instant isn't already lethal.
+    # WAIT keeps the agent on self_pos through the next tick (offset 1); the
+    # offset-0 check covers the current instant, which exists_safe_path skips.
     wait_safe = (
         0 not in semantic.danger_offsets.get(semantic.self_pos, ())
         and exists_safe_path(
@@ -125,18 +112,14 @@ def compute_action_mask(game_state: dict) -> np.ndarray:
     return mask_from_semantic(extract_semantic_state(game_state))
 
 
-# Oscillation breaker: opt-in, evaluation/deployment-only refinement layered
-# on top of an already-computed mask. Gated behind
-# config.ENABLE_OSCILLATION_BREAKER and `not self.train`, so it never
-# affects a training rollout.
+# Evaluation-only refinement layered on an already-computed mask
+# (config.ENABLE_OSCILLATION_BREAKER, and never during training).
 #
-# Known limitation: validated only against static (opponent-free) hazards;
-# cannot distinguish looping without reason from a legitimate reversal
-# caused by a moving opponent blocking the forward tile.
-OSCILLATION_BREAKER_MAX_CONSECUTIVE_INTERVENTIONS = 6  # one less than the
-# confinement window (7 steps, see is_confined_to_small_range call below), so
-# a multi-step in-place wait (e.g. for the agent's own bomb to explode) has
-# already broken confinement again well before this cap could ever bind.
+# Known limitation: cannot tell aimless looping from a legitimate reversal
+# forced by a moving opponent blocking the forward tile.
+# Kept below the confinement window length so a legitimate in-place wait
+# breaks confinement before the cap binds.
+OSCILLATION_BREAKER_MAX_CONSECUTIVE_INTERVENTIONS = 6
 
 
 def apply_oscillation_breaker(
@@ -144,24 +127,19 @@ def apply_oscillation_breaker(
     position_history,
     intervention_streak: int = 0,
 ) -> "tuple[np.ndarray, int]":
-    """Mask out reversing to the previous tile when the agent is confined to
-    <=2 tiles over the last 7 steps (see is_confined_to_small_range), unless
-    doing so would leave no legal action at all (retreating is the only way
-    out -- a genuine dead end).
+    """Masks out stepping back to the previous tile while the agent is
+    confined to a small range (is_confined_to_small_range), unless that
+    leaves no other movement direction (a genuine dead end).
 
-    Unlike an earlier version of this function, this does not require the
-    direction opposite the retreat to be legal (a straight-through passage);
-    any other still-legal action -- including a side branch perpendicular to
-    the direction the agent arrived from -- is enough to filter the retreat.
+    Args:
+        mask: already-computed legality mask.
+        position_history: recent positions, oldest first.
+        intervention_streak: consecutive prior calls that filtered a retreat;
+            at OSCILLATION_BREAKER_MAX_CONSECUTIVE_INTERVENTIONS the breaker
+            stops intervening so it cannot suppress a legitimate hold forever.
 
-    `intervention_streak` is the count of consecutive prior calls (while
-    confinement held) that actually filtered a retreat; once it reaches
-    OSCILLATION_BREAKER_MAX_CONSECUTIVE_INTERVENTIONS this call stops
-    intervening (returns the mask unchanged) even though confinement still
-    holds, so it can't indefinitely suppress a legitimate reason to hold
-    position. Returns (mask, updated_streak); the caller carries the updated
-    streak into its next call and resets it to 0 itself once this function
-    reports a non-confined state.
+    Returns:
+        (mask, updated_streak); the streak resets to 0 once not confined.
     """
     if not is_confined_to_small_range(position_history, window_size=7):
         return mask, 0
@@ -170,16 +148,14 @@ def apply_oscillation_breaker(
         return mask, 0
     current, previous = positions[-1], positions[-2]
     if previous == current:
-        # Last action was WAIT/BOMB (no actual movement) -- no "previous
-        # tile" to retreat from this step.
+        # No movement last step, so there is no tile to retreat to.
         return mask, intervention_streak
 
     direction_to_previous = next(
         (d for d in DIRECTIONS if neighbor_tile(current, d) == previous), None
     )
     if direction_to_previous is None:
-        # `previous` isn't actually adjacent to `current` (e.g. history not
-        # reset across rounds); nothing sensible to mask in that case.
+        # Non-adjacent history (e.g. not reset across rounds).
         return mask, intervention_streak
 
     idx_back = cfg.ACTIONS.index(direction_to_previous)
@@ -188,12 +164,11 @@ def apply_oscillation_breaker(
 
     candidate_mask = mask.copy()
     candidate_mask[idx_back] = False
-    # "Way out" means an alternative *movement* direction, not BOMB/WAIT
-    # (WAIT in particular is legal almost everywhere via mask_from_semantic's
-    # fallback, which would otherwise defeat this dead-end guard entirely).
+    # Only movement counts as a way out: WAIT is almost always legal via the
+    # mask's fallback and would otherwise defeat the dead-end guard.
     movement_indices = [cfg.ACTIONS.index(d) for d in DIRECTIONS]
     if not candidate_mask[movement_indices].any():
-        # Retreating is the only legal movement direction -- a genuine dead end.
+        # Genuine dead end.
         return mask, intervention_streak
 
     if intervention_streak >= OSCILLATION_BREAKER_MAX_CONSECUTIVE_INTERVENTIONS:
@@ -207,25 +182,15 @@ def should_force_deadlock_bomb(
     mask: np.ndarray,
     position_history,
 ) -> bool:
-    """config.ENABLE_DEADLOCK_BOMB's trigger: does the current step warrant
-    overriding the model's chosen action to BOMB? All of the following must
-    hold:
-    - the oscillation breaker's own confinement trigger holds (same
-      is_confined_to_small_range check, window_size=7, apply_oscillation_
-      breaker() uses -- independent of whether it actually masked anything
-      this step);
-    - no crates remain anywhere on the board;
-    - no collectable coins remain anywhere on the board;
-    - the current tile is itself a kill target (has_kill_target and
-      nearest_kill_distance == 0);
-    - BOMB is still legal in `mask` (this never bypasses the mask).
+    """Whether to override the chosen action with BOMB
+    (config.ENABLE_DEADLOCK_BOMB). All of the following must hold:
+    - the breaker's confinement trigger holds (whether or not it masked
+      anything this step);
+    - no crates and no collectable coins remain on the board;
+    - the current tile is itself a kill target;
+    - BOMB is legal in `mask` (the mask is never bypassed).
 
-    Does not touch the mask itself and does not affect apply_oscillation_
-    breaker()'s own retreat-masking behavior -- a caller applies this after
-    action selection, only for this one step. A two-tile confinement where
-    neither tile is a kill target never satisfies this (has_kill_target
-    fails), so that deadlock is left exactly as apply_oscillation_breaker()
-    already handles it.
+    The caller applies this after action selection; the mask is not modified.
     """
     if not is_confined_to_small_range(position_history, window_size=7):
         return False

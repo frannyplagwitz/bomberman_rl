@@ -1,11 +1,8 @@
-"""Shared Semantic Extractor.
+"""Semantic state extraction shared by features.py and action_mask.py.
 
-Parses the raw `game_state` dict into model-independent semantic
-information: self position, traversability, legal movement, coin BFS
-pathfinding, crate/bomb-aware traversability, bombing-position BFS,
-bomb-danger timing, opponent-aware traversability, and coin
-resource-competition. Reused as-is by features.py (1D adapter) and
-action_mask.py.
+Parses the raw `game_state` into model-independent information: position,
+traversability, coin/bombing/kill-target BFS, bomb-danger timing, opponent
+proximity and coin competition.
 """
 import itertools
 from collections import deque
@@ -50,56 +47,38 @@ class SemanticState:
     nearest_threat_timer: int = 0
     # Coin resource-competition flag.
     coin_contested: bool = False
-    # Kill-target: a candidate bombing tile whose blast would catch an
-    # opponent's current position (see kill_target_info()), scored
-    # independently of has_bombing_target/crates_destructible_at_target --
-    # not fused into one combined score.
+    # Tile whose blast would cover an opponent's current position (see
+    # kill_target_info()); scored independently of the crate bombing target.
     has_kill_target: bool = False
     nearest_kill_distance: Optional[int] = None
     kill_direction_dirs: Dict[str, bool] = field(
         default_factory=lambda: {d: False for d in DIRECTIONS}
     )
     expected_kill_value_at_target: float = 0.0
-    # Nearest-alive-opponent proximity/crowding, independent of has_kill_target
-    # (a reachable opponent need not be a valid kill target). See
-    # alive_opponent_distances() -- None/0 when no opponent is reachable this
-    # way, including no opponents at all.
+    # Proximity to reachable opponents (alive_opponent_distances());
+    # None/0 when none is reachable.
     nearest_alive_opponent_distance: Optional[int] = None
     opponents_within_3: int = 0
-    # Local mobility around self_pos, ignoring bombs/danger -- see
-    # reachable_space_count().
+    # Local mobility ignoring bombs/danger (reachable_space_count()).
     reachable_space: int = 0
-    # Raw information kept around (not exposed as scalar features) so
-    # action_mask.py can run its own escape-route search on the same
-    # already-parsed representation.
+    # Raw parsed data reused by action_mask.py's escape-route search.
     field_arr: np.ndarray = None
     blocked: FrozenSet[Coord] = frozenset()
     danger_offsets: Dict[Coord, Set[int]] = field(default_factory=dict)
-    # Opponents' raw current positions, exposed the same way as
-    # blocked/danger_offsets so action_mask.py's
-    # has_safe_escape_after_bombing() call can determine whether an
-    # opponent is close enough to warrant the stricter >=2-escape-direction
-    # requirement -- see that function's docstring.
+    # Opponents' current positions, used by the escape-route checks.
     opponents: List[Coord] = field(default_factory=list)
-    # Total remaining collectable coins on the board (not reachability-filtered,
-    # unlike has_reachable_coin/nearest_coin_distance above) -- kept around so
-    # action_mask.py's ENABLE_NO_BOMB_WHEN_BOARD_CLEARED check can tell "no
-    # coins left anywhere" apart from "no coins currently reachable".
+    # All remaining coins, not reachability-filtered, so "none left" can be
+    # told apart from "none reachable".
     coins_remaining: int = 0
 
 
-# Position-history utility shared by train.py's stall-v2 reward penalty
-# (_update_stall_v2) and the optional stall-history feature
-# (config.ENABLE_STALL_HISTORY_FEATURE).
+# Shared by train.py's stall-v2 penalty and the optional stall-history feature.
 def is_confined_to_small_range(
     position_history, window_size: int = 4, max_distinct: int = 2
 ) -> bool:
-    """True iff `position_history` (any sequence/deque of recent positions,
-    most-recent-last) has accumulated at least `window_size` entries AND,
-    restricted to the last `window_size` of them, visited at most
-    `max_distinct` distinct tiles. A short history always returns False --
-    trivially satisfying "few distinct tiles" just because there isn't much
-    history yet is not the "confined to a small range" situation this flags.
+    """True iff the history holds at least `window_size` positions
+    (most recent last) and the last `window_size` of them cover at most
+    `max_distinct` tiles. A shorter history never counts as confined.
     """
     if len(position_history) < window_size:
         return False
@@ -112,9 +91,8 @@ def _to_coord(raw) -> Coord:
 
 
 def is_free(field_arr: np.ndarray, x: int, y: int, blocked: FrozenSet[Coord] = frozenset()) -> bool:
-    """Traversability: a free tile is field==0 (walls=-1 and crates=1 both
-    block movement), and not currently occupied by a bomb or opponent
-    (`blocked`, matches environment.py's tile_is_free).
+    """A tile is free if it is open floor (not wall/crate) and not occupied
+    by a bomb or opponent (`blocked`), matching environment.py's tile_is_free.
     """
     return bool(field_arr[x, y] == 0) and (x, y) not in blocked
 
@@ -130,7 +108,7 @@ def legal_moves(field_arr: np.ndarray, pos: Coord, blocked: FrozenSet[Coord] = f
 
 
 def bfs_distances(field_arr: np.ndarray, start: Coord, blocked: FrozenSet[Coord] = frozenset()) -> Dict[Coord, int]:
-    """Plain BFS over free tiles (real BFS distance, not Euclidean/Manhattan)."""
+    """BFS distances over free tiles from `start`."""
     dist: Dict[Coord, int] = {start: 0}
     queue = deque([start])
     while queue:
@@ -152,46 +130,33 @@ def _bomb_positions(game_state: dict) -> FrozenSet[Coord]:
 
 
 def _opponent_positions(game_state: dict) -> FrozenSet[Coord]:
-    """Opponents' current positions, treated as temporary obstacles exactly
-    like bombs -- folded into the same `blocked` set consumed by
-    is_free()/legal_moves()/bfs_distances()/exists_safe_path(), so movement
-    mask and escape-route BFS pick this up with no separate handling.
-    """
+    """Opponents' current positions, treated as temporary obstacles like bombs."""
     return frozenset(_to_coord(o[3]) for o in game_state.get("others", []))
 
 
 def classify_invalid_action(prev_game_state: dict, action: str, new_game_state: dict) -> Optional[str]:
-    """Did `action`, chosen from `prev_game_state`, actually take effect by
-    `new_game_state`? Returns None if it did (or if `action` is WAIT, which
-    can never be invalid -- environment.py's perform_agent_action() always
-    accepts it).
+    """Classifies whether `action`, chosen from `prev_game_state`, failed to
+    take effect by `new_game_state`, using only information known at
+    decision time.
 
-    Otherwise classifies why it didn't, using only information already known
-    from `prev_game_state` (the state as of the decision, before any agent's
-    move resolves that tick) -- no environment.py instrumentation needed:
-    - "own_cause": the target tile was already blocked (wall/crate/bomb/a
-      surviving opponent's then-current position) or, for BOMB, bombs_left
-      was already False -- a genuine masking/judgment failure, should never
-      happen when the mask is respected.
-    - "contested_tile": the target tile was free in prev_game_state, so the
-      only way this could still fail is another agent moving onto it the
-      same tick (environment.py resolves agents sequentially in a per-step
-      random order) -- a framework-level residual risk unrelated to
-      mask/judgment correctness.
-
-    BOMB has no "contested_tile" case: placing a bomb only requires
-    bombs_left, never an empty target tile.
+    Returns:
+        None if the action took effect (WAIT never fails).
+        "own_cause" if the target tile was already blocked, or BOMB was
+            chosen without a bomb available -- a masking failure.
+        "contested_tile" if the target was free, so another agent must have
+            moved onto it the same tick -- a framework-level race unrelated
+            to mask correctness. BOMB never falls into this case.
     """
     if action == "BOMB":
         prev_bomb_available = bool(prev_game_state["self"][2])
         return None if prev_bomb_available else "own_cause"
     if action not in DIRECTIONS:
-        return None  # WAIT (or any other non-movement action) is never invalid.
+        return None
 
     prev_pos = _to_coord(prev_game_state["self"][3])
     new_pos = _to_coord(new_game_state["self"][3])
     if new_pos != prev_pos:
-        return None  # Moved as expected.
+        return None
 
     target = neighbor_tile(prev_pos, action)
     field_arr = prev_game_state["field"]
@@ -205,8 +170,8 @@ def classify_invalid_action(prev_game_state: dict, action: str, new_game_state: 
 
 
 def nearest_reachable_coin_distance(game_state: dict) -> Optional[int]:
-    """Lightweight variant used by rewards.py (Phi(s) = -d(s)); skips the
-    per-tied-coin direction computation that only act()'s feature vector needs.
+    """Nearest reachable coin distance for rewards.py's potential shaping;
+    skips the direction computation only the feature vector needs.
     """
     field_arr = game_state["field"]
     self_pos = _to_coord(game_state["self"][3])
@@ -222,9 +187,8 @@ def nearest_reachable_coin_distance(game_state: dict) -> Optional[int]:
 # --- Blast radius / crate / bombing-position / danger ---
 
 def blast_coords(field_arr: np.ndarray, pos: Coord, power: int) -> List[Coord]:
-    """Matches environment.py Bomb.get_blast_coords exactly: propagates up to
-    `power` tiles in each of the 4 directions, stopping only at a stone wall
-    (-1). Crates do not stop propagation (they are destroyed by it).
+    """Blast tiles of a bomb at `pos`, matching environment.py's
+    Bomb.get_blast_coords: stone walls stop propagation, crates do not.
     """
     x, y = pos
     coords = [pos]
@@ -249,31 +213,20 @@ def bombing_target_info(
     danger_offsets: Dict[Coord, Set[int]],
     opponents: List[Coord],
 ):
-    """BFS over reachable tiles for the tile from which placing a bomb would
-    destroy >=1 crate (self_pos itself is a valid candidate, distance 0).
+    """Finds the best reachable tile from which a bomb would destroy at least
+    one crate (self_pos included, at distance 0).
 
-    Among the safety-filtered candidates, selects the one maximizing
-    score = crates_destructible / (distance + 1), so a farther position
-    destroying more crates can outscore a very close position destroying
-    only one. Score is compared via exact fractions to avoid
-    float-equality edge cases. Ties in score are broken by smaller distance,
-    then by marking every first-step direction lying on some shortest path
-    to any of the remaining tied positions. `crates_destructible_at_target`
-    reports the maximum crate count among the final tied set.
+    With cfg.ENABLE_BOMBING_TARGET_SCORING_FORMULA, candidates are ranked by
+    crates_destructible / (distance + 1) using exact fractions; otherwise by
+    distance alone. Remaining ties go to the smaller distance, and every
+    first-step direction on a shortest path to any tied tile is marked. With
+    cfg.ENABLE_BOMBING_TARGET_SAFETY_FILTER, candidates also need a safe
+    escape (has_safe_escape_after_bombing(), using `opponents`).
 
-    cfg.ENABLE_BOMBING_TARGET_SCORING_FORMULA toggles between this scoring
-    rule and the original nearest-distance-only rule.
-
-    A candidate must also have a safe escape route
-    (has_safe_escape_after_bombing) to count as a valid bombing target. If
-    every crate-hitting candidate fails the safety check, falls through to
-    the "no target" return (has_bombing_target=False), the same fallback
-    used when no candidate hits any crate at all.
-
-    `opponents` is passed straight through to has_safe_escape_after_bombing()
-    for each candidate -- see that function's docstring for the dynamic
-    escape-direction requirement based on opponent proximity to the
-    candidate tile.
+    Returns:
+        (has_target, distance, path_dirs, crates_at_target); the crate count
+        is the maximum over the tied tiles. No candidate -> (False, None,
+        all-False dirs, 0).
     """
     dist_map = bfs_distances(field_arr, self_pos, blocked=blocked)
     candidates: Dict[Coord, int] = {}
@@ -317,16 +270,9 @@ def bombing_target_info(
 
 
 def nearest_bombing_position_distance(game_state: dict, power: int) -> Optional[int]:
-    """Lightweight variant for rewards.py, mirroring
-    nearest_reachable_coin_distance. Delegates to bombing_target_info()
-    itself (same safety filter, same score-based selection) instead of an
-    independent implementation, so the reward-shaping potential and the
-    feature vector's bombing-target fields can't target different tiles.
-
-    `opponents` is passed from `_opponent_positions(game_state)` for
-    consistency with every other call site; this function's own `blocked`
-    set (unlike extract_semantic_state()'s) does not itself include
-    opponent positions.
+    """Bombing-target distance for rewards.py. Delegates to
+    bombing_target_info() so the reward potential and the features always
+    refer to the same target.
     """
     field_arr = game_state["field"]
     self_pos = _to_coord(game_state["self"][3])
@@ -342,13 +288,8 @@ def nearest_bombing_position_distance(game_state: dict, power: int) -> Optional[
 
 
 def bomb_threatens_reachable_opponent(game_state: dict, pos: Coord, power: int) -> bool:
-    """True iff a bomb placed at `pos` would catch >=1 opponent's current
-    position within its blast radius, for rewards.py's wasteful-bomb
-    penalty. Pure snapshot check: compares each opponent's coordinate at
-    this instant against blast_coords(pos, power), with no adjacency-
-    reachability pre-filter and no prediction of subsequent opponent
-    movement -- an opponent that would still walk out of the blast before
-    it detonates is not modeled here.
+    """True iff a bomb at `pos` would cover some opponent's current position.
+    Snapshot check; does not predict whether the opponent escapes in time.
     """
     opponents = list(_opponent_positions(game_state))
     if not opponents:
@@ -361,20 +302,13 @@ def bomb_threatens_reachable_opponent(game_state: dict, pos: Coord, power: int) 
 def compute_danger_offsets(
     field_arr: np.ndarray, bombs: List[Tuple[Coord, int]], explosion_map: np.ndarray, power: int
 ) -> Dict[Coord, Set[int]]:
-    """Combines the `bombs` list (not yet exploded -- future danger) and
-    `explosion_map` (already exploded, still lethal -- current danger) into
-    one map: tile -> set of step-offsets (0 = this upcoming decision) at
-    which standing on that tile is lethal.
+    """Merges pending bombs (future danger) and `explosion_map` (current
+    danger) into tile -> set of step offsets at which standing there is
+    lethal (offset 0 = the step about to be decided).
 
-    Bomb timing (derived from environment.py's do_step/update_bombs/
-    update_explosions ordering): a bomb observed with timer=t explodes t
-    steps from now (t=0 means it explodes as part of resolving the action
-    about to be chosen), and remains lethal for one further lingering step
-    (EXPLOSION_TIMER=2 in settings.py: 1 explosion step + 1 lingering step)
-    -- hence offsets {t, t+1}. explosion_map[x, y] (only populated for
-    currently-lethal explosions) is nonzero exactly when that tile is
-    lethal for the step this game_state snapshot is used to decide, i.e. it
-    always corresponds to offset 0.
+    A bomb with timer t explodes t steps from now and stays lethal one step
+    longer, hence offsets {t, t+1} (derived from environment.py's update
+    order). Nonzero explosion_map tiles are lethal at offset 0.
     """
     danger: Dict[Coord, Set[int]] = {}
     for pos, timer in bombs:
@@ -396,25 +330,15 @@ def find_safe_path(
     danger_offsets: Dict[Coord, Set[int]],
     max_offset: int,
 ) -> Optional[List[Tuple[Coord, int]]]:
-    """Does there exist a movement sequence (WAIT counts as "stay") starting
-    at `start` (occupied at `start_offset`) that never occupies a tile at a
-    step-offset when it's in danger_offsets, and reaches, within max_offset
-    steps, a tile with no more recorded danger at any later offset? Time-
-    expanded BFS over (tile, offset) states; board is 17x17 and max_offset
-    is small (BOMB_TIMER-bounded), so this is cheap enough to run inside
-    act()'s per-step time budget.
+    """Time-expanded BFS over (tile, offset) states for an escape from
+    `start` (occupied at `start_offset`): never stands on a tile at a lethal
+    offset and, within `max_offset`, reaches a tile with no later danger.
+    WAIT counts as staying in place.
 
-    Returns the (tile, offset) sequence from start to the first tile
-    verified safe (inclusive of both ends), or None if no such sequence
-    exists. Path-reconstructing so callers can identify exactly which tiles
-    a given escape route passes through and when (see
-    `_opponent_conflicts_on_path()`), not just whether one exists.
-
-    Finds the shortest such sequence, not one confined to a single named
-    direction -- in an open (non-1-wide-corridor) area this can legitimately
-    cut off-axis (an L-shaped detour) rather than continuing straight past a
-    blast line, since only tiles on the blast's own straight lines are ever
-    dangerous. Expected behavior, not a bug.
+    Returns:
+        The shortest (tile, offset) sequence from start to the first safe
+        tile, both ends inclusive, or None if none exists. The route may
+        turn off-axis rather than follow one direction.
     """
     if start_offset in danger_offsets.get(start, ()):
         return None
@@ -460,26 +384,19 @@ def exists_safe_path(
     danger_offsets: Dict[Coord, Set[int]],
     max_offset: int,
 ) -> bool:
-    """Bool-only view of find_safe_path(), for callers that don't need the
-    actual path (WAIT legality, plain per-direction movement legality)."""
+    """Bool-only view of find_safe_path()."""
     return find_safe_path(start, start_offset, field_arr, blocked, danger_offsets, max_offset) is not None
 
 
-# Search horizon for exists_safe_path: a bomb is lethal at offsets
-# {timer, timer+1}, and only one of this agent's own bombs can be in flight
-# at a time, so BOMB_TIMER+1 is the longest any known danger can persist;
-# +1 more for an off-by-one margin. Shared by action_mask.py's
-# BOMB/movement/WAIT checks and bombing_target_info()'s safety check.
+# Search horizon for escape checks: covers the longest a known bomb stays
+# lethal, plus one step of margin.
 SAFETY_HORIZON = cfg.BOMB_TIMER + 2
 
 def _opponent_distance_maps(
     field_arr: np.ndarray, blocked: FrozenSet[Coord], opponents: List[Coord],
 ) -> Dict[Coord, Dict[Coord, int]]:
-    """Per-opponent real BFS distance map from its current position, keyed by
-    opponent coord. Each opponent's own tile is excluded from `blocked` for
-    its own BFS root (an opponent standing on a tile that's otherwise a
-    member of `blocked`, e.g. a just-placed bomb tile if opponents overlap
-    it, must still be able to path out from where it actually stands).
+    """Per-opponent BFS distance map from its current position. Each
+    opponent's own tile is removed from `blocked` so it can path out of it.
     """
     return {
         opp: bfs_distances(field_arr, opp, blocked=blocked - {opp})
@@ -490,14 +407,9 @@ def _opponent_distance_maps(
 def _path_conflicts(
     path: List[Tuple[Coord, int]], opponent_dist_maps: Dict[Coord, Dict[Coord, int]],
 ) -> Dict[Coord, Set[Coord]]:
-    """For a candidate escape path (tile, offset) sequence, returns {tile:
-    {conflicting opponents}} for every tile on the path where some
-    opponent's real BFS distance (from its current position, no future-
-    position prediction) to that tile is <= the path's own offset there --
-    i.e. the opponent could physically be standing on that tile by the time
-    this path would use it, using ordinary current-position information
-    only (see has_safe_escape_after_bombing()'s docstring for the design
-    this replaces).
+    """Returns {tile: opponents} for every tile on `path` that some
+    opponent could reach (current-position BFS, no prediction) no later than
+    the path occupies it.
     """
     conflicts: Dict[Coord, Set[Coord]] = {}
     for tile, offset in path:
@@ -507,9 +419,8 @@ def _path_conflicts(
     return conflicts
 
 
-REQUIRED_ESCAPE_DIRECTIONS_CAP = 4  # a tile has at most 4 movement
-# directions, so N+1 can never usefully exceed 4 regardless of how many
-# opponents are involved -- there simply aren't more routes to require.
+# A tile has only four movement directions to require.
+REQUIRED_ESCAPE_DIRECTIONS_CAP = 4
 
 
 def _candidate_escape_paths(
@@ -519,10 +430,8 @@ def _candidate_escape_paths(
     danger_offsets: Dict[Coord, Set[int]],
     start_offset: int,
 ) -> Dict[str, List[Tuple[Coord, int]]]:
-    """Per-direction safe-escape path from `pos` (occupied at
-    `start_offset`): one find_safe_path() BFS per movement direction whose
-    neighbor tile is free. A direction is absent from the result iff no
-    safe path exists that way.
+    """Per-direction safe escape path from `pos` (occupied at
+    `start_offset`); directions without one are omitted.
     """
     paths: Dict[str, List[Tuple[Coord, int]]] = {}
     for d in DIRECTIONS:
@@ -543,33 +452,14 @@ def _has_sufficient_escape_directions(
     opponents: List[Coord],
     start_offset: int,
 ) -> bool:
-    """Does `pos` (occupied at `start_offset`) have >=N+1 independent
-    first-step escape directions, each verified via find_safe_path from
-    start_offset+1 onward, where N is the number of distinct opponents that
-    conflict with at least one candidate path (see `_path_conflicts()`) --
-    not the number of conflicting tiles?
+    """Whether `pos` (occupied at `start_offset`) has at least N+1 escape
+    directions, where N is the number of distinct opponents conflicting with
+    any candidate path (_path_conflicts()).
 
-    Per-tile conflict, not a single distance-to-`pos` heuristic: each
-    candidate direction's full found path is checked tile-by-tile against
-    every opponent's real, current-position BFS distance (see
-    `_opponent_distance_maps()`/`_path_conflicts()`) -- a tile at path-offset
-    s is a conflict iff some opponent's distance to it is <=s, i.e. the
-    opponent could physically reach it in time using only its ordinary,
-    already-known position (no future-movement prediction).
-
-    "Independent" now means: the required N+1 paths must be pairwise
-    conflict-disjoint -- for any two selected paths, neither path's own
-    conflict tiles may appear anywhere on the other path's route (a
-    conflicting opponent seizing a shared tile must not be able to
-    invalidate two of the N+1 chosen paths at once). Only conflict tiles are
-    required to differ; non-conflict tiles may overlap freely between
-    paths. This replaces the previous fixed "distinct first step" rule,
-    which only guarded against a same-tick race for the very first escape
-    tile and missed the same opponent walking into a later leg of a
-    multi-step route.
-
-    With N=0 (no opponent conflicts with any candidate path), this reduces
-    to the pre-existing ">=1 safe path exists" standard.
+    The chosen paths must be pairwise conflict-disjoint: no path's conflict
+    tiles may lie on another chosen path, so one opponent cannot cut off two
+    routes at once. Non-conflict tiles may be shared. With N=0 this reduces
+    to "at least one safe path exists".
     """
     candidate_paths = _candidate_escape_paths(pos, field_arr, blocked, danger_offsets, start_offset)
     if not candidate_paths:
@@ -610,32 +500,16 @@ def has_safe_escape_after_bombing(
     power: int,
     opponents: List[Coord],
 ) -> bool:
-    """True iff placing a bomb at `tile` right now would leave a robust safe
-    escape, generalizing action_mask.py's own BOMB-legality check to an
-    arbitrary candidate tile, so bombing_target_info() below can filter out
-    candidates with no safe escape. Mirrors the mask's construction exactly:
-    the bomb's own blast tiles become lethal at {BOMB_TIMER, BOMB_TIMER+1},
-    and `tile` itself is blocked for the search horizon (can't walk back
-    onto an unexploded bomb). `tile` itself is checked for immediate
-    (offset 0) danger first, since placing the bomb keeps the agent
-    standing on `tile` for this step.
+    """True iff bombing at `tile` now leaves a sufficiently robust escape.
 
-    Delegates the escape-direction counting/conflict analysis to
-    `_has_sufficient_escape_directions()` -- see its docstring for the
-    N+1-independent-paths standard, shared with action_mask.py's per-step
-    redundancy re-check (applied while walking away from an already-placed
-    bomb, not just at the placement instant) so both apply the identical
-    standard without duplicating it.
+    Adds the new bomb's blast to the danger map, blocks `tile` itself, rejects
+    immediate danger on `tile`, then applies the same N+1-independent-paths
+    standard as the mask's per-step re-check
+    (_has_sufficient_escape_directions()).
 
-    Known limitation: this validates that some safe continuation exists
-    from a position at the instant of the check, using each opponent's
-    current position (no future-position prediction) -- an opponent that
-    subsequently moves in a way this check didn't anticipate can still
-    invalidate a previously-verified route. Also unaddressed: two agents
-    racing for the same immediately-adjacent tile in the same tick, which
-    the environment resolves via its own per-step random agent order and
-    can turn an already-chosen, already-verified-safe move into
-    INVALID_ACTION with no time left to recover.
+    Known limitation: uses opponents' current positions only, so later
+    opponent movement or a same-tick race for an adjacent tile can still
+    invalidate a route judged safe here.
     """
     hypothetical_danger = {t: set(offsets) for t, offsets in danger_offsets.items()}
     for blast_tile in blast_coords(field_arr, tile, power):
@@ -658,24 +532,14 @@ def _opponent_escape_difficulty(
     self_pos: Coord,
     other_opponents: List[Coord],
 ) -> Fraction:
-    """Escape-difficulty score in [0, 1] for `opp`, standing inside a
-    candidate kill-target bomb's blast, under that bomb's hypothetical
-    danger. Mirrors has_safe_escape_after_bombing()'s per-direction
-    machinery but rooted at `opp`'s own position instead of self_pos:
-    `opp`'s own tile is excluded from `blocked` (it must be able to path
-    out from where it actually stands) and self_pos joins `blocked` (the
-    agent's own tile is a physical obstacle to the opponent).
-    `other_opponents` (every opponent except `opp`) plays the role
-    has_safe_escape_after_bombing()'s `opponents` argument plays for
-    self_pos -- chasers whose current-position BFS distance can flag a
-    conflict on one of `opp`'s candidate escape tiles (see
-    `_path_conflicts()`).
+    """Escape-difficulty score in [0, 1] for opponent `opp` standing in a
+    candidate bomb's blast.
 
-    Score = 1 - (conflict-free escape direction count) / 4: the fraction
-    of the 4 movement directions with no such chaser threat anywhere on
-    their safe-escape path. A pure spatial-difficulty proxy from a single
-    blast/danger snapshot, not a predicted death probability -- it does
-    not model whether `opp` would actually choose that direction.
+    Uses the same per-direction escape search rooted at `opp`: its own tile
+    is unblocked and self_pos is blocked; `other_opponents` act as chasers
+    that can create path conflicts. Score is the fraction of the four
+    directions without a conflict-free escape. A spatial proxy from one
+    snapshot, not a death probability.
     """
     opp_blocked = (blocked - {opp}) | {self_pos}
     paths = _candidate_escape_paths(opp, field_arr, opp_blocked, hypothetical_danger, start_offset=0)
@@ -694,27 +558,17 @@ def kill_target_info(
     danger_offsets: Dict[Coord, Set[int]],
     opponents: List[Coord],
 ):
-    """BFS over reachable tiles for the tile from which placing a bomb
-    would catch >=1 opponent's CURRENT position within blast range -- a
-    snapshot judgment (see bomb_threatens_reachable_opponent()), not a
-    predicted real kill probability: it does not model whether a covered
-    opponent would subsequently walk out of the blast before it
-    detonates.
+    """Finds the best reachable tile from which a safe bomb would cover at
+    least one opponent's current position (a snapshot, not a kill
+    probability). Independent of crate targets.
 
-    Parallel to, but scored independently of, bombing_target_info(): a
-    candidate tile qualifies here purely by covering an opponent's current
-    position, regardless of whether it also hits any crate.
+    A tile's value is the maximum escape difficulty
+    (_opponent_escape_difficulty()) among the opponents it covers. Selection
+    mirrors bombing_target_info(): value / (distance + 1) with exact
+    fractions, then distance, then all shortest-path first steps.
 
-    Safety filtering reuses has_safe_escape_after_bombing() unchanged
-    (the agent's own escape route). Each covered opponent additionally
-    gets an escape-difficulty score in [0, 1] (see
-    `_opponent_escape_difficulty()`); a tile's expected kill value is the
-    MAX (not sum/average) of its covered opponents' difficulty scores --
-    the easiest-of-the-covered-opponents-to-kill represents the tile,
-    already bounded to [0, 1] with no further normalization needed.
-    Selection mirrors bombing_target_info(): score = expected_kill_value
-    / (distance + 1), compared via exact fractions; max score wins, ties
-    broken by distance then first-step direction.
+    Returns:
+        (has_target, distance, path_dirs, expected_kill_value).
     """
     dist_map = bfs_distances(field_arr, self_pos, blocked=blocked)
     candidates: Dict[Coord, Fraction] = {}
@@ -769,15 +623,11 @@ def alive_opponent_distances(
     dist_map: Dict[Coord, int],
     opponents: List[Coord],
 ) -> Dict[Coord, int]:
-    """Per-opponent BFS distance, keyed by opponent coord. Since every
-    opponent's own tile is itself a member of `blocked`, it never appears in
-    `dist_map` (a BFS distance map already computed from self_pos over that
-    same `blocked` set) -- mirroring bombing_target_info()'s treatment of a
-    crate (never stood on, only required to be within range of a reachable
-    tile). An opponent's distance is the minimum, among its own free
-    neighboring tiles, of that tile's distance in `dist_map`, plus 1. An
-    opponent with every neighboring tile walled, crated, or occupied is
-    unreachable and excluded.
+    """Per-opponent BFS distance from self_pos, keyed by opponent coord.
+
+    Opponent tiles are blocked, so an opponent's distance is one more than
+    its nearest free neighbor's distance in `dist_map`. Opponents with no
+    reachable free neighbor are omitted.
     """
     distances: Dict[Coord, int] = {}
     for opp in opponents:
@@ -792,10 +642,9 @@ def alive_opponent_distances(
 
 
 def reachable_space_count(field_arr: np.ndarray, self_pos: Coord, opponents: List[Coord], depth_cap: int) -> int:
-    """Count of tiles (including self_pos) reachable from self_pos within
-    `depth_cap` BFS steps. Blocked = walls/crates (via is_free's field==0
-    check) and living opponents' current tiles only -- bomb tiles do not
-    block and no danger/timing is considered.
+    """Number of tiles (self_pos included) within `depth_cap` BFS steps,
+    treating walls, crates and opponents as obstacles; bombs and danger are
+    ignored.
     """
     blocked = frozenset(opponents)
     dist_map = bfs_distances(field_arr, self_pos, blocked=blocked)
@@ -813,10 +662,7 @@ def extract_semantic_state(game_state: dict) -> SemanticState:
     if explosion_map is None:
         explosion_map = np.zeros_like(field_arr)
 
-    # Opponents' current positions join bombs as currently known temporary
-    # obstacles in the one shared `blocked` set consumed by movement mask,
-    # escape-route BFS, coin BFS, and bombing-target BFS alike -- no
-    # separate handling per call site.
+    # Opponents join bombs as temporary obstacles for every BFS below.
     blocked = _bomb_positions(game_state) | frozenset(opponents)
     can_move = legal_moves(field_arr, self_pos, blocked=blocked)
 
@@ -829,10 +675,8 @@ def extract_semantic_state(game_state: dict) -> SemanticState:
 
     if reachable_coins:
         nearest_distance = min(dist_from_self[c] for c in reachable_coins)
-        # Multiple coins tied at the minimum distance -> no arbitrary
-        # tie-break, mark all first-step directions that lie on some
-        # shortest path to any nearest coin. A neighbor N is a valid first
-        # step towards coin C iff dist(N, C) == nearest_distance - 1.
+        # Ties at the minimum distance mark every first step on a shortest
+        # path to any tied coin rather than picking one arbitrarily.
         tied_coins = [c for c in reachable_coins if dist_from_self[c] == nearest_distance]
         for coin in tied_coins:
             dist_from_coin = bfs_distances(field_arr, coin, blocked=blocked)
@@ -843,11 +687,7 @@ def extract_semantic_state(game_state: dict) -> SemanticState:
                 if dist_from_coin.get(nxt) == nearest_distance - 1:
                     coin_path_dirs[d] = True
 
-        # coin_contested is purely a same-step distance comparison, no
-        # intent/trajectory modeling. An opponent's distance to the locked
-        # nearest-coin set uses its own BFS rooted at its own position, over
-        # the same shared `blocked` graph used everywhere else in this
-        # function.
+        # Pure same-step distance comparison; no intent modeling.
         for opp in opponents:
             dist_from_opp = bfs_distances(field_arr, opp, blocked=blocked)
             opp_coin_dists = [dist_from_opp[c] for c in tied_coins if c in dist_from_opp]
