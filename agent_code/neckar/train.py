@@ -143,7 +143,7 @@ def detect_custom_events(self, old_game_state: dict, self_action: str, new_game_
     
     # If agent did anything, add step penalty event 
     # Done to make sure agent will finish game before max steps if possible 
-    # Reasoning: Saves computation time, reduces risk of agent doing something dumb
+    # Saves computation time, reduces risk of agent doing something dumb
     if self_action: 
         custom_events.append("STEP_PENALTY")
                    
@@ -244,8 +244,7 @@ def detect_custom_events(self, old_game_state: dict, self_action: str, new_game_
             custom_events.append("TRAPPED_ENEMY")
             self.episode_trapped_enemy += 1    
         
-        
-        
+         
     # Check if our agent is trapped in new state
     is_trapped = spatial.is_entity_trapped(
         field = new_field, entity_pos=new_pos, 
@@ -525,8 +524,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
         self.logger.info(f"[Episode {len(self.episode_lengths)}] "
                          f"Avg Length (last 10): {avg_len:.1f} steps")
 
-        # Rolling action distribution - nested here so it covers the last 10 episodes, matching the
-        # label below, and only clears once every 10 episodes instead of every single one
+        # Rolling action distribution
         total_actions = sum(self.action_counts.values())
         if total_actions > 0:
             dist_str = " | ".join(
@@ -626,44 +624,10 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
             
         })
             
-    
-        # Create file names for the metrics 
-        #common_filepath = (f"{self.run_id}-{self.model_type}_{self.behavior}_{self.scenario}_{num_rounds}_rounds_{num_opponents}_opponents.png")
-
-        #loss_filepath    = "total_loss_" + common_filepath
-        #critic_filepath  = "critic_loss_" + common_filepath
-        #mr_filepath      = "mean_reward_" + common_filepath 
-        #entropy_filepath = "entropy_" + common_filepath
-        #episode_filepath = "episode_steps_" + common_filepath
-        
-    
-        # Create title names for the metrics 
-        
-        #common_title = (f" - Model: {self.model_type}, Behavior: {self.behavior}, Scenario: {self.scenario}")
-        #model_name = "PPO"
-        
-        
-        #loss_title = model_name + " Total MSE Loss" + common_title
-        #critic_title = model_name + " Critic MSE Loss" + common_title 
-        #mr_title = model_name + " Mean Reward" + common_title
-        #entropy_title = model_name + " Entropy" + common_title
-        #episode_title = model_name + " Episode Steps" + common_title 
-
-        
-        #plot_metric(self.ppo_agent.loss_history, loss_filepath, "Training Loss", loss_title)
-        
-        #if hasattr(self.ppo_agent, "critic_loss_history"):
-        #    plot_metric(self.ppo_agent.critic_loss_history, critic_filepath, 
-         #               "Critic Loss", critic_title)
-        
-        #plot_metric(self.ppo_agent.mean_reward_history, mr_filepath, "Mean Reward", mr_title)
-        #plot_metric(self.ppo_agent.entropy_history, entropy_filepath, "Entropy", entropy_title)
-        #plot_metric(self.episode_lengths, episode_filepath, "Episode Steps", episode_title)
-
     episode = len(self.episode_lengths)
     is_final_round = num_rounds > 0 and episode == num_rounds
 
-    # Keep a rolling "latest" copy (no -ep suffix, so run_eval ignores it)
+    # Keep a rolling copy of latest episode
     if episode % SAVE_LATEST_EVERY == 0 or is_final_round:
         save_model(self.model, filepath)
         self.logger.info(f"Saved trained model to {filepath}")

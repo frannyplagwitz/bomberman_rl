@@ -67,7 +67,6 @@ def load_groups(group_specs):
     return groups
 
 def load_files(paths, labels=None):
-    """Old behaviour: every file is its own 'group' of one run."""
     if labels is None:
         labels = [os.path.splitext(os.path.basename(p))[0] for p in paths]
     if len(labels) != len(paths):

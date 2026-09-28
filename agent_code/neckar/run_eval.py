@@ -106,7 +106,7 @@ def summarize_checkpoint(stats_path: str, label: str, agent_name: str = AGENT_NA
     )
     row["got_killed_rate_%"] = round(100.0 * opponent_kills_on_us / n_rounds, 1)
  
-    # Estimated survival: rounds not ended by our own suicide or being killed.
+    # Estimated survival =  rounds not ended by our own suicide or being killed.
     # Inferred from two ways agent can die
     survived = max(0, n_rounds - own_suicides - opponent_kills_on_us)
     row["survived_round_rate_%"] = round(100.0 * survived / n_rounds, 1)
